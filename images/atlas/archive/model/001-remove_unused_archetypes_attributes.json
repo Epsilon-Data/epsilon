@@ -1,0 +1,85 @@
+{
+  "patches": [
+    {
+      "id": "TYPEDEF_PATCH_3000_001A",
+      "description": "Remove 'is_active' attribute from archetype",
+      "action": "REMOVE_ATTRIBUTE",
+      "typeName": "archetype",
+      "applyToVersion": "1.0",
+      "updateToVersion": "1.1",
+      "attributeName": "is_active"
+    },
+    {
+      "id": "TYPEDEF_PATCH_3000_001B",
+      "description": "Remove 'width' attribute from archetype",
+      "action": "REMOVE_ATTRIBUTE",
+      "typeName": "archetype",
+      "applyToVersion": "1.1",
+      "updateToVersion": "1.2",
+      "attributeName": "width"
+    },
+    {
+      "id": "TYPEDEF_PATCH_3000_001C",
+      "description": "Remove 'height' attribute from archetype",
+      "action": "REMOVE_ATTRIBUTE",
+      "typeName": "archetype",
+      "applyToVersion": "1.2",
+      "updateToVersion": "1.3",
+      "attributeName": "height"
+    },
+    {
+      "id": "TYPEDEF_PATCH_3000_001D",
+      "description": "Remove 'selected' attribute from archetype",
+      "action": "REMOVE_ATTRIBUTE",
+      "typeName": "archetype",
+      "applyToVersion": "1.3",
+      "updateToVersion": "1.4",
+      "attributeName": "selected"
+    },
+    {
+      "id": "TYPEDEF_PATCH_3000_001E",
+      "description": "Remove 'dragging' attribute from archetype",
+      "action": "REMOVE_ATTRIBUTE",
+      "typeName": "archetype",
+      "applyToVersion": "1.4",
+      "updateToVersion": "1.5",
+      "attributeName": "dragging"
+    },
+    {
+      "id": "TYPEDEF_PATCH_3000_002A",
+      "description": "Remove 'width' attribute from archetype_category",
+      "action": "REMOVE_ATTRIBUTE",
+      "typeName": "archetype_category",
+      "applyToVersion": "1.0",
+      "updateToVersion": "1.1",
+      "attributeName": "width"
+    },
+    {
+      "id": "TYPEDEF_PATCH_3000_002B",
+      "description": "Remove 'height' attribute from archetype_category",
+      "action": "REMOVE_ATTRIBUTE",
+      "typeName": "archetype_category",
+      "applyToVersion": "1.1",
+      "updateToVersion": "1.2",
+      "attributeName": "height"
+    },
+    {
+      "id": "TYPEDEF_PATCH_3000_002C",
+      "description": "Remove 'selected' attribute from archetype_category",
+      "action": "REMOVE_ATTRIBUTE",
+      "typeName": "archetype_category",
+      "applyToVersion": "1.2",
+      "updateToVersion": "1.3",
+      "attributeName": "selected"
+    },
+    {
+      "id": "TYPEDEF_PATCH_3000_002D",
+      "description": "Remove 'dragging' attribute from archetype_category",
+      "action": "REMOVE_ATTRIBUTE",
+      "typeName": "archetype_category",
+      "applyToVersion": "1.3",
+      "updateToVersion": "1.4",
+      "attributeName": "dragging"
+    }
+  ]
+}

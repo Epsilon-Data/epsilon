@@ -1,0 +1,20 @@
+{
+  "patches": [
+    {
+      "id": "TYPEDEF_PATCH_3000_001",
+      "description": "Add ACTIVE to template_status enum",
+      "action": "UPDATE_ENUMDEF",
+      "typeName": "template_status",
+      "applyToVersion": "1.0",
+      "updateToVersion": "1.1",
+      "params": null,
+      "elementDefs": [
+        {
+          "value": "ACTIVE",
+          "description": "Template is finalised and ready to be published",
+          "ordinal": 2
+        }
+      ]
+    }
+  ]
+}

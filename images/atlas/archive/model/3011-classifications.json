@@ -1,0 +1,65 @@
+{
+  "enumDefs": [
+    {
+      "name": "analysis_access_level",
+      "description": "Access control levels for archetype nodes analysis",
+      "serviceType": "archetype",
+      "typeVersion": "1.0",
+      "elementDefs": [
+        {
+          "value": "NONE",
+          "description": "No analytical access",
+          "ordinal": 0
+        },
+        {
+          "value": "HIGH_LEVEL",
+          "description": "Access limited to high-level or aggregated data",
+          "ordinal": 1
+        },
+        {
+          "value": "DETAILED",
+          "description": "Access to full detailed or record-level data",
+          "ordinal": 2
+        }
+      ],
+      "defaultValue": "NONE"
+    }
+  ],
+  "classificationDefs": [
+    {
+      "name": "archetype_node_analysis_permissions",
+      "description": "Specifies allowed analysis depth for an archetype node (NONE, HIGH_LEVEL, DETAILED).",
+      "typeVersion": "1.0",
+      "entityTypes": ["archetype_node"],
+      "attributeDefs": [
+        {
+          "name": "access_level",
+          "typeName": "analysis_access_level",
+          "isOptional": false,
+          "cardinality": "SINGLE",
+          "valuesMinCount": 1,
+          "valuesMaxCount": 1,
+          "defaultValue": "NONE",
+          "isUnique": false,
+          "isIndexable": true
+        }
+      ]
+    },
+    {
+      "name": "participant_PII",
+      "description": "Used for classifying a data which contains participant personal information, hence indicating confidential private",
+      "typeVersion": "1.0",
+      "attributeDefs": [],
+      "superTypes": []
+    },
+    {
+      "name": "participant_NON_PII",
+      "description": "Used for classifying a data which contains participant non personal information, hence indicating confidential lesser than private",
+      "typeVersion": "1.0",
+      "attributeDefs": [],
+      "superTypes": []
+    }
+  ],
+  "structDefs": [],
+  "entityDefs": []
+}

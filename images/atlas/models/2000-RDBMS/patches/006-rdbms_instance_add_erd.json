@@ -1,0 +1,23 @@
+{
+  "patches": [
+    {
+      "id": "TYPEDEF_PATCH_2000_139",
+      "description": "Add 'erd' attributes to rdbms_instance",
+      "action": "ADD_ATTRIBUTE",
+      "typeName": "rdbms_instance",
+      "applyToVersion": "1.8",
+      "updateToVersion": "1.9",
+      "params": null,
+      "attributeDefs": [
+        {
+          "name": "erd",
+          "typeName": "string",
+          "isOptional": true,
+          "cardinality": "SINGLE",
+          "isUnique": false,
+          "isIndexable": false
+        }
+      ]
+    }
+  ]
+}

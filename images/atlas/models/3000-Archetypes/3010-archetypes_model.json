@@ -1,0 +1,295 @@
+{
+  "enumDefs": [
+    {
+      "name": "analysis_access_level",
+      "description": "Access control levels for archetype nodes analysis",
+      "serviceType": "archetype",
+      "typeVersion": "1.0",
+      "elementDefs": [
+        {
+          "value": "NONE",
+          "description": "No analytical access",
+          "ordinal": 0
+        },
+        {
+          "value": "HIGH_LEVEL",
+          "description": "Access limited to high-level or aggregated data",
+          "ordinal": 1
+        },
+        {
+          "value": "DETAILED",
+          "description": "Access to full detailed or record-level data",
+          "ordinal": 2
+        }
+      ],
+      "defaultValue": "NONE"
+    },
+    {
+      "name": "template_status",
+      "description": "Status of an archetype or template object",
+      "typeVersion": "1.0",
+      "serviceType": "archetype",
+      "elementDefs": [
+        {
+          "value": "DRAFT",
+          "description": "Template is in draft mode and not yet published",
+          "ordinal": 0
+        },
+        {
+          "value": "PUBLISHED",
+          "description": "Template is finalized and published for use",
+          "ordinal": 1
+        }
+      ],
+      "defaultValue": "DRAFT"
+    },
+    {
+      "name": "node_type",
+      "description": "Type of an archetype_node",
+      "typeVersion": "1.0",
+      "serviceType": "archetype",
+      "elementDefs": [
+        {
+          "value": "ROOT",
+          "description": "Archetype root node",
+          "ordinal": 0
+        },
+        {
+          "value": "BRANCH",
+          "description": "Archetype branch node",
+          "ordinal": 1
+        },
+        {
+          "value": "LEAF",
+          "description": "Archetype leaf node",
+          "ordinal": 2
+        }
+      ]
+    }
+  ],
+  "classificationDefs": [
+    {
+      "name": "archetype_node_analysis_permissions",
+      "description": "Specifies allowed analysis depth for an archetype node (NONE, HIGH_LEVEL, DETAILED).",
+      "typeVersion": "1.0",
+      "superTypes": [],
+      "serviceType": "archetype",
+      "entityTypes": ["archetype_node"],
+      "propagate": true,
+      "removePropagationsOnEntityDelete": true,
+      "attributeDefs": [
+        {
+          "name": "access_level",
+          "typeName": "analysis_access_level",
+          "isOptional": false,
+          "cardinality": "SINGLE",
+          "valuesMinCount": 1,
+          "valuesMaxCount": 1,
+          "defaultValue": "NONE",
+          "isUnique": false,
+          "isIndexable": true
+        }
+      ]
+    },
+    {
+      "name": "root_node",
+      "description": "Used for classifying an archetype root node",
+      "typeVersion": "1.0",
+      "serviceType": "archetype",
+      "entityTypes": ["archetype_node"],
+      "propagate": false,
+      "attributeDefs": []
+    },
+    {
+      "name": "branch_node",
+      "description": "Used for classifying an archetype branch node (also known as an inner node, inode for short, or internal node)",
+      "typeVersion": "1.0",
+      "serviceType": "archetype",
+      "entityTypes": ["archetype_node"],
+      "propagate": false,
+      "attributeDefs": []
+    },
+    {
+      "name": "leaf_node",
+      "description": "Used for classifying an archetype leaf node",
+      "typeVersion": "1.0",
+      "serviceType": "archetype",
+      "entityTypes": ["archetype_node"],
+      "propagate": false,
+      "attributeDefs": []
+    },
+    {
+      "name": "participant_PII",
+      "description": "Used for classifying a data which contains participant personal information, hence indicating confidential private",
+      "typeVersion": "1.0",
+      "superTypes": [],
+      "attributeDefs": []
+    },
+    {
+      "name": "participant_NON_PII",
+      "description": "Used for classifying a data which contains participant non personal information, hence indicating confidential lesser than private",
+      "typeVersion": "1.0",
+      "superTypes": [],
+      "attributeDefs": []
+    }
+  ],
+  "entityDefs": [
+    {
+      "name": "archetype_template",
+      "description": "a reference object for project archetype template",
+      "typeVersion": "1.0",
+      "superTypes": ["Metadata"],
+      "serviceType": "archetype",
+      "attributeDefs": [
+        {
+          "name": "projectId",
+          "typeName": "string",
+          "isOptional": false,
+          "cardinality": "SINGLE",
+          "isUnique": false,
+          "isIndexable": true
+        },
+        {
+          "name": "status",
+          "typeName": "template_status",
+          "isOptional": false,
+          "cardinality": "SINGLE",
+          "defaultValue": "DRAFT",
+          "isUnique": false,
+          "isIndexable": true
+        }
+      ]
+    },
+    {
+      "name": "archetype_node",
+      "description": "an archetype node in an archetype template",
+      "typeVersion": "1.0",
+      "superTypes": ["Metadata"],
+      "serviceType": "archetype",
+      "attributeDefs": [
+        {
+          "name": "position",
+          "typeName": "map<string,float>",
+          "isOptional": false,
+          "cardinality": "SINGLE",
+          "valuesMinCount": 1,
+          "valuesMaxCount": 1,
+          "isUnique": false,
+          "isIndexable": false
+        },
+        {
+          "name": "level",
+          "typeName": "int",
+          "isOptional": false,
+          "cardinality": "SINGLE",
+          "valuesMinCount": 1,
+          "valuesMaxCount": 1,
+          "isUnique": false,
+          "isIndexable": true
+        },
+        {
+          "name": "label",
+          "typeName": "string",
+          "isOptional": false,
+          "cardinality": "SINGLE",
+          "valuesMinCount": 1,
+          "valuesMaxCount": -1,
+          "isUnique": false,
+          "isIndexable": true
+        }
+      ]
+    }
+  ],
+  "relationshipDefs": [
+    {
+      "name": "rdbms_instance_archetype_templates",
+      "description": "a rdbms_instance reference to archetype_templates",
+      "typeVersion": "1.0",
+      "serviceType": "archetype",
+      "relationshipCategory": "COMPOSITION",
+      "relationshipLabel": "__rdbms_instance.archetype_templates",
+      "endDef1": {
+        "type": "rdbms_instance",
+        "name": "archetype_templates",
+        "isContainer": true,
+        "cardinality": "SET",
+        "isLegacyAttribute": false
+      },
+      "endDef2": {
+        "type": "archetype_template",
+        "name": "instance",
+        "isContainer": false,
+        "cardinality": "SINGLE",
+        "isLegacyAttribute": false
+      },
+      "propagateTags": "NONE"
+    },
+    {
+      "name": "archetype_template_nodes",
+      "description": "an archetype_template reference to archetype nodes",
+      "typeVersion": "1.0",
+      "serviceType": "archetype",
+      "relationshipCategory": "COMPOSITION",
+      "relationshipLabel": "__archetype_template.nodes",
+      "endDef1": {
+        "type": "archetype_template",
+        "name": "nodes",
+        "isContainer": true,
+        "cardinality": "SET",
+        "isLegacyAttribute": false
+      },
+      "endDef2": {
+        "type": "archetype_node",
+        "name": "template",
+        "isContainer": false,
+        "cardinality": "SINGLE",
+        "isLegacyAttribute": false
+      },
+      "propagateTags": "ONE_TO_TWO"
+    },
+    {
+      "name": "archetype_node_hierarchy",
+      "description": "a parent-child hierarchy among archetype nodes",
+      "typeVersion": "1.0",
+      "serviceType": "archetype",
+      "relationshipCategory": "AGGREGATION",
+      "relationshipLabel": "__archetype_node.child_nodes",
+      "endDef1": {
+        "type": "archetype_node",
+        "name": "child_nodes",
+        "isContainer": true,
+        "cardinality": "SET",
+        "isLegacyAttribute": false
+      },
+      "endDef2": {
+        "type": "archetype_node",
+        "name": "parent_node",
+        "isContainer": false,
+        "cardinality": "SINGLE",
+        "isLegacyAttribute": false
+      },
+      "propagateTags": "TWO_TO_ONE"
+    },
+    {
+      "name": "rdbms_column_archetype_nodes",
+      "description": "a link between rdbms_column and archetype_(leaf)_nodes",
+      "serviceType": "archetype",
+      "typeVersion": "1.0",
+      "relationshipCategory": "ASSOCIATION",
+      "relationshipLabel": "__rdbms_column.archetype_nodes",
+      "endDef1": {
+        "type": "rdbms_column",
+        "name": "archetype_nodes",
+        "cardinality": "SET",
+        "isLegacyAttribute": false
+      },
+      "endDef2": {
+        "type": "archetype_node",
+        "name": "column",
+        "cardinality": "SINGLE",
+        "isLegacyAttribute": false
+      },
+      "propagateTags": "ONE_TO_TWO"
+    }
+  ]
+}

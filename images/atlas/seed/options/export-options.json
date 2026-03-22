@@ -1,0 +1,40 @@
+{
+  "itemsToExport": [
+    {
+      "typeName": "archetype",
+      "uniqueAttributes": { "qualifiedName": "" }
+    },
+    {
+      "typeName": "archetype_category",
+      "uniqueAttributes": { "qualifiedName": "" }
+    },
+    {
+      "typeName": "rdbms_instance",
+      "uniqueAttributes": { "qualifiedName": "" }
+    },
+    {
+      "typeName": "rdbms_db",
+      "uniqueAttributes": { "qualifiedName": "" }
+    },
+    {
+      "typeName": "rdbms_table",
+      "uniqueAttributes": { "qualifiedName": "" }
+    },
+    {
+      "typeName": "rdbms_column",
+      "uniqueAttributes": { "qualifiedName": "" }
+    },
+    {
+      "typeName": "rdbms_index",
+      "uniqueAttributes": { "qualifiedName": "" }
+    },
+    {
+      "typeName": "rdbms_foreign_key",
+      "uniqueAttributes": { "qualifiedName": "" }
+    }
+  ],
+  "options": {
+    "fetchType": "FULL",
+    "matchType": "startsWith"
+  }
+}

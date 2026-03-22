@@ -1,0 +1,737 @@
+name: epsilon
+
+# list of volumes
+volumes:
+  pg_admin_data:
+    driver: local
+  pg_test_data:
+    driver: local
+  pg_auth_data:
+    driver: local
+  pg_platform_data:
+    driver: local
+  vault_data:
+    driver: local
+  cassandra_data:
+    driver: local
+  elastic_data:
+    driver: local
+  redis_data:
+    driver: local
+  atlas_state:
+    driver: local
+
+# list of networks
+networks:
+  pg_platform:
+    driver: bridge
+  pg_test:
+    driver: bridge
+  pg_auth:
+    driver: bridge
+  redis_host:
+    driver: bridge
+  atlas_host:
+    driver: bridge
+  zookeeper_host:
+    driver: bridge
+  kafka_host:
+    driver: bridge
+  elasticsearch_host:
+    driver: bridge
+  cassandra_host:
+    driver: bridge
+  vault_host:
+    driver: bridge
+  pg_internal:
+    name: "epsilon_pg_internal"
+  auth_internal:
+    name: "epsilon_auth_internal"
+  api_internal:
+    name: "epsilon_api_internal"
+  metadata_internal:
+    name: "epsilon_metadata_internal"
+  frontend:
+    name: "epsilon_frontend"
+  # rabbit_host:
+  #   driver: bridge
+  # rabbit_internal:
+  #   name: "epsilon_rabbit_internal"
+  # pg_external:
+  #   external: true
+
+# list of services
+services:
+  # databases
+  pg_platform:
+    container_name: pg_platform
+    image: postgres:15-alpine
+    restart: unless-stopped
+    volumes:
+      # TODO: look over config file
+      - "./images/postgresql/postgresql.conf:/etc/postgresql/postgresql.conf:ro"
+      - pg_platform_data:/var/lib/postgresql/data
+    expose:
+      - 5432
+    ports:
+      - 6543:5432
+    environment:
+      POSTGRES_DB: ${PLATFORM_POSTGRES_DB:-epsilon}
+      POSTGRES_USER: ${PLATFORM_POSTGRES_USER:-epsilon_admin}
+      POSTGRES_PASSWORD: ${PLATFORM_POSTGRES_PASSWORD:-supersecret}
+    networks:
+      - pg_platform
+      - pg_internal
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1024k"
+        max-file: "10"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready", "-d", "epsilon"]
+      interval: 10s
+      timeout: 60s
+      retries: 10
+      start_period: 20s
+    command: postgres -c 'config_file=/etc/postgresql/postgresql.conf'
+  pg_auth:
+    container_name: pg_auth
+    image: postgres:15-alpine
+    restart: unless-stopped
+    volumes:
+      # TODO: look over config file
+      - "./images/postgresql/postgresql.conf:/etc/postgresql/postgresql.conf:ro"
+      - pg_auth_data:/var/lib/postgresql/data
+    expose:
+      - 5432
+    ports:
+      - 5434:5432
+    environment:
+      POSTGRES_DB: ${AUTH_POSTGRES_DB:-keycloak}
+      POSTGRES_USER: ${AUTH_POSTGRES_USER:-auth_admin}
+      POSTGRES_PASSWORD: ${AUTH_POSTGRES_PASSWORD:-supersecret}
+    networks:
+      - pg_auth
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready", "-d", "keycloak"]
+      interval: 10s
+      timeout: 60s
+      retries: 10
+      start_period: 20s
+    command: postgres -c 'config_file=/etc/postgresql/postgresql.conf'
+  redis:
+    image: redis:latest
+    container_name: redis-container
+    ports:
+      - "6379:6379" # Expose Redis on default port
+    networks:
+      - redis_host
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  pg_test:
+    container_name: pg_test
+    image: postgres:15-alpine
+    restart: unless-stopped
+    volumes:
+      - "./images/postgresql/init:/docker-entrypoint-initdb.d:ro"
+      # TODO: look over config file
+      - "./images/postgresql/postgresql.conf:/etc/postgresql/postgresql.conf:ro"
+      - pg_test_data:/var/lib/postgresql/data
+    expose:
+      - 5432
+    ports:
+      - 5433:5432
+    environment:
+      POSTGRES_DB: ${TEST_POSTGRES_DB:-test}
+      POSTGRES_USER: ${TEST_POSTGRES_USER:-test_admin}
+      POSTGRES_PASSWORD: ${TEST_POSTGRES_PASSWORD:-supersecret}
+    networks:
+      - pg_test
+      - pg_internal
+      # - pg_external
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1024k"
+        max-file: "10"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready", "-d", "epsilon"]
+      interval: 10s
+      timeout: 60s
+      retries: 10
+      start_period: 20s
+    command: postgres -c 'config_file=/etc/postgresql/postgresql.conf'
+
+  # metadata services
+  atlas-server:
+    container_name: atlas-server
+    image: aarepuu/atlas
+    # build: ../../atlas
+    profiles: [metadata]
+    restart: unless-stopped
+    user: "0:0"
+    volumes:
+      - ./images/atlas/conf/atlas-env.sh:/opt/atlas/conf/atlas-env.sh:ro
+      - ./images/atlas/conf/log4j.properties:/opt/atlas/conf/log4j.properties:ro
+      - ./images/atlas/models:/opt/atlas/models:ro
+      - ./images/atlas/patches:/opt/atlas/patches:ro
+      - ./images/atlas/scripts:/opt/atlas/scripts:ro
+      - ./images/atlas/entrypoint.sh:/entrypoint.sh:ro
+      # atlas init state
+      - atlas_state:/opt/atlas/state
+      # TODO: remove in prod
+      - ./images/atlas/seed:/seed
+      - ./images/atlas/import/:/tmp/import
+      - ./atlas-logs:/opt/atlas/logs
+    entrypoint:
+      [
+        "sh",
+        "-c",
+        "chown -R 1000:1000 /opt/atlas/state && rm -f /opt/atlas/logs/atlas.pid && exec su -s /bin/bash atlas -c '/entrypoint.sh'",
+      ]
+    expose:
+      - 21000
+    ports:
+      - "21000:21000"
+    environment:
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-epsilon}
+      AUTH_SERVER_URL: ${AUTH_SERVER_URL:-http://keycloak/realms}
+      KEYCLOAK_ATLAS_RESOURCE: ${KEYCLOAK_ATLAS_RESOURCE:-atlas}
+      ATLAS_URI: ${ATLAS_URI:-http://localhost:21000}
+      ATLAS_TSL_ENABLED: ${ATLAS_TSL_ENABLED:-false}
+      ATLAS_ADMIN_PASSWORD: ${ATLAS_ADMIN_PASSWORD:-secret}
+      CASSANDRA_EPSILON_PASSWORD: ${CASSANDRA_EPSILON_PASSWORD:-secret}
+      SEED_ATLAS: ${SEED_ATLAS:-false}
+    networks:
+      - atlas_host # TODO: assess if needed
+      - metadata_internal
+      - pg_test
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1024k"
+        max-file: "10"
+    depends_on:
+      cassandra:
+        condition: service_healthy
+      zookeeper:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      cassandra-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'wget --no-verbose --tries=1 --timeout=15 -qO- http://localhost:21000/api/atlas/admin/status | grep -q ''"Status":"ACTIVE"''',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 3m
+  zookeeper:
+    image: zookeeper
+    container_name: zookeeper
+    profiles: [metadata]
+    restart: unless-stopped
+    expose:
+      - 2181
+    ports:
+      - "2181:2181"
+    networks:
+      - zookeeper_host
+      - metadata_internal
+    healthcheck:
+      test: ["CMD", "zkServer.sh", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1024k"
+        max-file: "10"
+  kafka:
+    container_name: kafka
+    # TODO: upgrade kafka
+    image: wurstmeister/kafka
+    profiles: [metadata]
+    restart: unless-stopped
+    expose:
+      - 9092
+    ports:
+      - "9092:9092"
+    hostname: kafka
+    environment:
+      KAFKA_CREATE_TOPICS: "create_events:1:1,delete_events:1:1,ATLAS_HOOK:1:1"
+      KAFKA_ADVERTISED_HOST_NAME: kafka
+      KAFKA_ADVERTISED_PORT: 9092
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+    networks:
+      - kafka_host
+      - metadata_internal
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1",
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1024k"
+        max-file: "10"
+  cassandra:
+    image: cassandra:4.1
+    container_name: cassandra
+    profiles: [metadata]
+    expose:
+      - 9042
+    ports:
+      - 9042:9042
+    volumes:
+      - "./images/cassandra/cassandra.yaml:/etc/cassandra/cassandra.yaml"
+      - "cassandra_data:/var/lib/cassandra"
+    environment:
+      CASSANDRA_CLUSTER_NAME: ${CASSANDRA_CLUSTER_NAME:-epsilon}
+      CASSANDRA_LISTEN_ADDRESS: cassandra
+      CASSANDRA_BROADCAST_ADDRESS: cassandra
+      CASSANDRA_START_RPC: true
+      CASSANDRA_RPC_ADDRESS: 0.0.0.0
+      # CASSANDRA_LISTEN_ADDRESS: auto
+      MAX_HEAP_SIZE: ${CASSANDRA_MAX_HEAP_SIZE:-256M}
+      HEAP_NEWSIZE: ${CASSANDRA_HEAP_NEWSIZE:-128M}
+    networks:
+      - cassandra_host
+      - metadata_internal
+    healthcheck:
+      test: ["CMD-SHELL", "nodetool status | grep -q '^UN'"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1024k"
+        max-file: "10"
+  cassandra-init:
+    container_name: cassandra-init
+    image: cassandra:4.1
+    profiles: [metadata]
+    restart: "no"
+    depends_on:
+      cassandra:
+        condition: service_healthy
+    volumes:
+      - "./images/cassandra/init.sh:/scripts/init.sh:ro"
+    networks:
+      - cassandra_host
+    environment:
+      CASSANDRA_HOST: cassandra
+      CASSANDRA_PORT: 9042
+      CASSANDRA_ADMIN_PASSWORD: ${CASSANDRA_ADMIN_PASSWORD:-supersecret}
+      CASSANDRA_EPSILON_PASSWORD: ${CASSANDRA_EPSILON_PASSWORD:-secret}
+    command: ["/bin/bash", "/scripts/init.sh"]
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.22
+    container_name: elasticsearch
+    hostname: elasticsearch
+    profiles: [metadata]
+    # TODO: prepare for prod
+    environment:
+      #  TODO: clean up variables
+      - node.name=${ELASTIC_NODE:-atlas-node}
+      - discovery.type=${ELASTIC_TYPE:-single-node}
+      - cluster.name=${ELASTIC_CLUSTER_NAME:-atlas-search-cluster}
+      - bootstrap.memory_lock=${ELASTIC_MEMORY_LOCK:-true}
+      - "ES_JAVA_OPTS=-Xms1024m -Xmx1024m"
+      # - ES_JAVA_OPTS=${ES_JAVA_OPTS:-"-Xms1024m -Xmx1024m"}
+      # - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:-elastic}
+      - xpack.security.enabled=${ELASTIC_SECURITY_ENABLED:-false}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    healthcheck:
+      test: "curl -s http://localhost:9200 >/dev/null || exit 1"
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+    volumes:
+      - "elastic_data:/usr/share/elasticsearch/data"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    networks:
+      - elasticsearch_host
+      - metadata_internal
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1024k"
+        max-file: "10"
+
+  # auth services
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0.6
+    container_name: keycloak
+    depends_on:
+      pg_auth:
+        condition: service_healthy
+    environment:
+      # Storage settings
+      KC_DB: ${KC_DB:-postgres}
+      KC_DB_URL_HOST: pg_auth
+      KC_DB_URL_DATABASE: ${AUTH_POSTGRES_DB:-keycloak}
+      KC_DB_USERNAME: ${AUTH_POSTGRES_USER:-auth_admin}
+      KC_DB_PASSWORD: ${AUTH_POSTGRES_PASSWORD:-supersecret}
+      # Admin Console
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin@epsilon-data.org}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-secret}
+      # Host and proxy settings
+      KC_HTTP_RELATIVE_PATH: ${KC_HTTP_RELATIVE_PATH:-/}
+      KC_HOSTNAME_STRICT: ${KC_HOSTNAME_STRICT:-false}
+      KC_PROXY_HEADERS: ${KC_PROXY_HEADERS:-xforwarded}
+      KC_HTTP_ENABLED: ${KC_HTTP_ENABLED:-true}
+      # Metrics and logs
+      KC_HOSTNAME_DEBUG: ${KC_HOSTNAME_DEBUG:-true}
+      KC_LOG_LEVEL: ${KC_LOG_LEVEL:-DEBUG}
+      KC_HTTP_ACCESS_LOG_ENABLED: ${KC_HTTP_ACCESS_LOG_ENABLED:-true}
+      KC_HEALTH_ENABLED: ${KC_HEALTH_ENABLED:-true}
+      KC_METRICS_ENABLED: ${KC_METRICS_ENABLED:-true}
+      ####### KEYCLOAK INIT TO SUBSTITUTE #######
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-epsilon}
+      # Token handler client (needed for authz)
+      TOKEN_HANDLER_CLIENT_ID: ${TOKEN_HANDLER_CLIENT_ID:-epsilon-token-handler}
+      TOKEN_HANDLER_CLIENT_SECRET: ${TOKEN_HANDLER_CLIENT_SECRET:-ZYZS8YrWCz0WZvBWZQ62KbdSfjVLBgsn}
+      TOKEN_HANDLER_REDIRECT_URIS: ${EPSILON_AUTH_REDIRECT_URIS:-http://localhost:3000/*}
+      TOKEN_HANDLER_WEB_ORIGIN: ${EPSILON_AUTH_TRUSTED_WEB_ORIGIN:-http://localhost:3000}
+    volumes:
+      # initial realm creation
+      - "./images/keycloak/init:/opt/keycloak/data/import:ro"
+      - "./images/keycloak/themes:/opt/keycloak/themes:ro"
+      - "./images/keycloak/user-profile.json:/opt/keycloak/user-profile.json:ro"
+      - "./images/keycloak/entrypoint.sh:/opt/keycloak/entrypoint.sh:ro"
+    expose:
+      - 8080
+      - 9000
+    ports:
+      - 8080:8080
+      - 9000:9000
+    networks:
+      - pg_auth
+      - auth_internal
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'exec 3<>/dev/tcp/localhost/9000; echo -e "GET ${KC_HTTP_RELATIVE_PATH:-}/health/ready HTTP/1.1\nhost: localhost:9000\n" >&3; timeout --preserve-status 1 cat <&3 | grep -m 1 status | grep -m 1 UP; ERROR=$?; exec 3<&-; exec 3>&-; exit $$ERROR',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    entrypoint: ["/bin/sh", "/opt/keycloak/entrypoint.sh"]
+    command:
+      - start
+      - -Dkeycloak.import=/opt/keycloak/data/import
+
+  keycloak-config-cli:
+    container_name: keycloak-config-cli
+    image: adorsys/keycloak-config-cli:latest-25.0.1
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    environment:
+      IMPORT_VALIDATE: "true"
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8080}
+      KEYCLOAK_USER: ${KEYCLOAK_ADMIN:-admin@epsilon-data.org}
+      KEYCLOAK_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-secret}
+      IMPORT_FILES_LOCATIONS: "/config/*"
+      # wait for KC to be available
+      KEYCLOAK_AVAILABILITYCHECK_ENABLED: "true"
+      IMPORT_VARSUBSTITUTION_ENABLED: ${IMPORT_VARSUBSTITUTION_ENABLED:-true}
+      IMPORT_MANAGED_GROUP: no-delete
+      IMPORT_MANAGED_CLIENT_SCOPE: no-delete
+      IMPORT_MANAGED_CLIENT_AUTHORIZATION_RESOURCES: no-delete
+      IMPORT_MANAGED_CLIENT_AUTHORIZATION_POLICIES: no-delete
+      IMPORT_MANAGED_CLIENT_AUTHORIZATION_SCOPES: no-delete
+      # IMPORT_VARSUBSTITUTION_PREFIX: "$${"
+      # IMPORT_VARSUBSTITUTION_SUFFIX: "}"
+      LOGGING_LEVEL_ROOT: ${LOGGING_LEVEL_ROOT:-INFO}
+      # IMPORT_HTTP_LOGGING: ${IMPORT_HTTP_LOGGING:-true}
+      ####### KEYCLOAK VARIABLES TO SUBSTITUTE #######
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-epsilon}
+      # Token handler client
+      TOKEN_HANDLER_CLIENT_ID: ${TOKEN_HANDLER_CLIENT_ID:-epsilon-token-handler}
+      TOKEN_HANDLER_CLIENT_SECRET: ${TOKEN_HANDLER_CLIENT_SECRET:-ZYZS8YrWCz0WZvBWZQ62KbdSfjVLBgsn}
+      TOKEN_HANDLER_REDIRECT_URIS: ${EPSILON_AUTH_REDIRECT_URIS:-http://localhost:3000/*}
+      TOKEN_HANDLER_WEB_ORIGIN: ${EPSILON_AUTH_TRUSTED_WEB_ORIGIN:-http://localhost:3000}
+      # Auth admin client
+      EPSILON_ADMIN_API_CLIENT_ID: ${EPSILON_ADMIN_API_CLIENT_ID:-epsilon-admin-api}
+      EPSILON_ADMIN_API_CLIENT_SECRET: ${EPSILON_ADMIN_API_CLIENT_SECRET:-25WNchjDUsl9LWL6gZLLUaTQ1uIWMYMn}
+      # SDK client
+      EPSILON_SDK_CLIENT_ID: ${EPSILON_SDK_CLIENT_ID:-sdk-client}
+      EPSILON_SDK_CLIENT_SECRET: ${EPSILON_SDK_CLIENT_SECRET:-6nHzYqIlwcQDqDc2TuJtilucZxAH3O6N}
+      # Coordinator client
+      EPSILON_COORDINATOR_CLIENT_ID: ${EPSILON_COORDINATOR_CLIENT_ID:-coordinator-client}
+      EPSILON_COORDINATOR_CLIENT_SECRET: ${EPSILON_COORDINATOR_CLIENT_SECRET:-2MkLHmnKck3orcVfhGhp4IWM1GOpJ7Wl}
+      # Job Scheduler OAuth client
+      JOBSCHEDULER_OAUTH_CLIENT_ID: ${JOBSCHEDULER_OAUTH_CLIENT_ID:-jobscheduler-oauth}
+      JOBSCHEDULER_OAUTH_CLIENT_SECRET: ${JOBSCHEDULER_OAUTH_CLIENT_SECRET:-OjZwdTpS8RyT1qy07ccU88QBxJSLZC27}
+      JOBSCHEDULER_REDIRECT_URIS: ${JOBSCHEDULER_REDIRECT_URIS:-http://localhost:3005/api/auth/callback}
+      JOBSCHEDULER_ORIGINS: ${JOBSCHEDULER_ORIGINS:-http://localhost:3005}
+      JOBSCHEDULER_BACKCHANNEL_LOGOUT_URL: ${JOBSCHEDULER_BACKCHANNEL_LOGOUT_URL:-http://host.docker.internal:3005/api/auth/backchannel-logout}
+      # Admin Panel client
+      EPSILON_ADMIN_PANEL_CLIENT_ID: ${EPSILON_ADMIN_PANEL_CLIENT_ID:-epsilon-admin-panel}
+      EPSILON_ADMIN_PANEL_CLIENT_SECRET: ${EPSILON_ADMIN_PANEL_CLIENT_SECRET:-secret}
+      EPSILON_ADMIN_PANEL_REDIRECT_URIS: ${EPSILON_ADMIN_PANEL_REDIRECT_URIS:-http://localhost:3003/*}
+      EPSILON_ADMIN_PANEL_WEB_ORIGIN: ${EPSILON_ADMIN_PANEL_WEB_ORIGIN:-http://localhost:3003}
+      EPSILON_ADMIN_PANEL_BACKCHANNEL_LOGOUT_URL: ${EPSILON_ADMIN_PANEL_BACKCHANNEL_LOGOUT_URL:-http://host.docker.internal:3003/api/auth/backchannel-logout}
+      # JupyterHub client
+      EPSILON_JUPYTERHUB_CLIENT_ID: ${EPSILON_JUPYTERHUB_CLIENT_ID:-epsilon-jupyterhub}
+      EPSILON_JUPYTERHUB_CLIENT_SECRET: ${EPSILON_JUPYTERHUB_CLIENT_SECRET:-secret}
+      EPSILON_JUPYTERHUB_REDIRECT_URIS: ${EPSILON_JUPYTERHUB_REDIRECT_URIS:-http://localhost:8000/hub/oauth_callback}
+      EPSILON_JUPYTERHUB_WEB_ORIGIN: ${EPSILON_JUPYTERHUB_WEB_ORIGIN:-http://localhost:8000}
+      # Test Data Owner User
+      KEYCLOAK_USER_PASSWORD: ${KEYCLOAK_USER_PASSWORD:-secret}
+      KEYCLOAK_USER_EMAIL: ${KEYCLOAK_USER_EMAIL:-owner@epsilon-data.org}
+      KEYCLOAK_USER_FIRSTNAME: ${KEYCLOAK_USER_FIRSTNAME:-Data Owner}
+      KEYCLOAK_USER_LASTNAME: ${KEYCLOAK_USER_LASTNAME:-User}
+      # Test Data Custodian User (Database Admin)
+      KEYCLOAK_ADMIN_USER_PASSWORD: ${KEYCLOAK_ADMIN_USER_PASSWORD:-secret}
+      KEYCLOAK_ADMIN_USER_EMAIL: ${KEYCLOAK_ADMIN_USER_EMAIL:-dbadmin@epsilon-data.org}
+      KEYCLOAK_ADMIN_USER_FIRSTNAME: ${KEYCLOAK_ADMIN_USER_FIRSTNAME:-Data Admin}
+      KEYCLOAK_ADMIN_USER_LASTNAME: ${KEYCLOAK_ADMIN_USER_LASTNAME:-User}
+      # Test Researcher User (Analysis)
+      KEYCLOAK_RESEARCH_USER_PASSWORD: ${KEYCLOAK_RESEARCH_USER_PASSWORD:-secret}
+      KEYCLOAK_RESEARCH_USER_EMAIL: ${KEYCLOAK_RESEARCH_USER_EMAIL:-researcher@epsilon-data.org}
+      KEYCLOAK_RESEARCH_USER_FIRSTNAME: ${KEYCLOAK_RESEARCH_USER_FIRSTNAME:-Researcher}
+      KEYCLOAK_RESEARCH_USER_LASTNAME: ${KEYCLOAK_RESEARCH_USER_LASTNAME:-User}
+      # SMTP - email
+      KEYCLOAK_SMTP_HOST: ${KEYCLOAK_SMTP_HOST:-host.docker.internal}
+      KEYCLOAK_SMTP_PORT: ${KEYCLOAK_SMTP_PORT:-1025}
+      KEYCLOAK_SMTP_FROM: ${KEYCLOAK_SMTP_FROM:-no-reply@epsilon-data.org}
+      # used in prod
+      KEYCLOAK_SMTP_AUTH: ${KEYCLOAK_SMTP_AUTH:-false}
+      KEYCLOAK_SMTP_STARTTLS: ${KEYCLOAK_SMTP_STARTTLS:-false}
+      KEYCLOAK_SMTP_USERNAME: ${KEYCLOAK_SMTP_USERNAME:-apikey}
+      KEYCLOAK_SMTP_PASSWORD: ${KEYCLOAK_SMTP_PASSWORD:-supersecretsendgridpassword}
+      # Misc configurations
+      KEYCLOAK_ACCESS_TOKEN_LIFESPAN: ${KEYCLOAK_ACCESS_TOKEN_LIFESPAN:-1200}
+    networks:
+      - auth_internal
+    volumes:
+      - ./images/keycloak-config-cli:/config:ro
+
+  # credentials store
+  vault:
+    container_name: vault
+    image: hashicorp/vault:1.21.1
+    restart: unless-stopped
+    volumes:
+      # TODO: look over config and parametrise
+      - "./images/vault/config.json:/vault/config/config.json:ro"
+      - "vault_data:/vault/file"
+    environment:
+      # TODO: clean up variables
+      VAULT_DEV_LISTEN_ADDRESS: ${VAULT_DEV_LISTEN_ADDRESS:-0.0.0.0:8200}
+      VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_DEV_ROOT_TOKEN_ID:-vault-plaintext-root-token}
+      VAULT_ADDR: ${VAULT_ADDR:-http://0.0.0.0:8200}
+      VAULT_API_ADDR: ${VAULT_API_ADDR:-http://0.0.0.0:8200}
+    cap_add:
+      - IPC_LOCK
+    expose:
+      - 8200
+    ports:
+      - 8200:8200
+    networks:
+      - vault_host
+      - auth_internal
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://127.0.0.1:8200/v1/sys/health?standbyok=true&sealedcode=200&uninitcode=200",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    # runs in dev mode
+    # WARNING! dev mode is enabled! In this mode, Vault runs entirely in-memory
+    command: vault server -dev
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1024k"
+        max-file: "10"
+  vault-init:
+    container_name: vault-init
+    image: hashicorp/vault:1.21.1
+    restart: "no"
+    environment:
+      VAULT_DEV_MODE: ${VAULT_DEV_MODE:-true}
+      VAULT_ADDR: ${VAULT_INTERNAL_API_ADDR:-http://vault:8200}
+      VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_DEV_ROOT_TOKEN_ID:-vault-plaintext-root-token}
+      VAULT_ADMIN_PASSWORD: ${VAULT_ADMIN_PASSWORD:-secret}
+      KEYCLOAK_REALM_URL: ${KEYCLOAK_REALM_URL:-http://keycloak:8080/realms/epsilon}
+      KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-epsilon.api}
+      AWS_REGION: ${AWS_REGION:-ap-southeast-2}
+      AWS_INSTANCE_ROLE_ARN: ${AWS_INSTANCE_ROLE_ARN:-test}
+    volumes:
+      # TODO: check if all config is parameterised
+      - "./images/vault/vault-init.sh:/vault-init.sh:ro"
+      - "./images/vault/policies:/policies:ro"
+    depends_on:
+      vault:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    networks:
+      - vault_host
+      - auth_internal
+    entrypoint: sh -c "/vault-init.sh"
+
+  # tunnel relay for epsilon-proxy connections (local dev)
+  rathole:
+    container_name: rathole
+    build: ./images/rathole
+    restart: unless-stopped
+    ports:
+      - "7100:7000"
+      - "10000-10100:10000-10100"
+    volumes:
+      - ./rathole-config:/config
+    command: ["/config/server.toml"]
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1024k"
+        max-file: "10"
+
+  # dev services
+  nginx:
+    container_name: nginx
+    image: nginx:latest
+    expose:
+      - 80
+    ports:
+      - 80:80
+      - 443:443
+    environment:
+      EPSILON_AUTH_SERVER_PROTO: ${EPSILON_AUTH_SERVER_PROTO:-http}
+      EPSILON_AUTH_SERVER_PORT: ${EPSILON_AUTH_SERVER_PORT:-80}
+      EPSILON_AUTH_SERVER_URI: http://host.docker.internal:8080
+      EPSILON_VAULT_SERVER_PROTO: ${EPSILON_VAULT_SERVER_PROTO:-http}
+      EPSILON_VAULT_SERVER_PORT: ${EPSILON_VAULT_SERVER_PORT:-80}
+      EPSILON_VAULT_SERVER_URI: http://host.docker.internal:8200
+      EPSILON_TOKEN_HANDLER_URI: http://host.docker.internal:8081
+      EPSILON_API_HUB_URI: http://host.docker.internal:3334
+      EPSILON_ATLAS_URI: http://host.docker.internal:21000
+    volumes:
+      - "./images/nginx/templates:/etc/nginx/templates:ro"
+      - "./images/nginx/nginx.conf:/etc/nginx/nginx.conf:ro"
+      - "./images/nginx/index.html:/etc/nginx/html/index.html:ro"
+    networks:
+      - auth_internal
+      - api_internal
+      - metadata_internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1024k"
+        max-file: "10"
+  mailhog:
+    image: axllent/mailpit:latest
+    profiles: [frontend]
+    container_name: email-server
+    restart: always
+    ports:
+      - 1025:1025
+      - 8025:8025
+  token-handler-api:
+    container_name: token-handler-api
+    profiles: [frontend]
+    restart: always
+    image: ghcr.io/epsilon-data/ts-services:latest
+    environment:
+      EPSILON_AUTH_TOKEN_HANDLER_PORT: ${EPSILON_AUTH_TOKEN_HANDLER_PORT:-8081}
+      EPSILON_AUTH_API_PREFIX: ${EPSILON_AUTH_API_PREFIX:-/api/v1/token}
+      EPSILON_AUTH_CLIENT_ID: ${TOKEN_HANDLER_CLIENT_ID:-epsilon-token-handler}
+      EPSILON_AUTH_CLIENT_SECRET: ${TOKEN_HANDLER_CLIENT_SECRET:-ZYZS8YrWCz0WZvBWZQ62KbdSfjVLBgsn}
+      EPSILON_AUTH_REDIRECT_URI: ${EPSILON_AUTH_REDIRECT_URI:-http://localhost:3000}
+      EPSILON_AUTH_POST_LOGOUT_REDIRECT_URI: ${EPSILON_AUTH_POST_LOGOUT_REDIRECT_URI:-http://localhost:3000}
+      EPSILON_AUTH_SCOPE: ${EPSILON_AUTH_SCOPE:-openid profile}
+      EPSILON_AUTH_COOKIE_NAME_PREFIX: ${EPSILON_AUTH_COOKIE_NAME_PREFIX:-epsilon}
+      EPSILON_AUTH_COOKIE_ENCRYPTION_KEY: ${EPSILON_AUTH_COOKIE_ENCRYPTION_KEY:-e2c8470d07a8dcdcd07267e353e32805d87dd560ce93e2fae5c1869b7118e5a9}
+      EPSILON_AUTH_TRUSTED_WEB_ORIGIN: ${EPSILON_AUTH_TRUSTED_WEB_ORIGIN:-http://localhost:3000}
+      EPSILON_AUTHORIZE_ENDPOINT: ${EPSILON_AUTHORIZE_ENDPOINT:-http://keycloak:8080/realms/epsilon/protocol/openid-connect/auth}
+      EPSILON_LOGOUT_ENDPOINT: ${EPSILON_LOGOUT_ENDPOINT:-http://keycloak:8080/realms/epsilon/protocol/openid-connect/logout}
+      EPSILON_TOKEN_ENDPOINT: ${EPSILON_TOKEN_ENDPOINT:-http://keycloak:8080/realms/epsilon/protocol/openid-connect/token}
+      EPSILON_USERINFO_ENDPOINT: ${EPSILON_USERINFO_ENDPOINT:-http://keycloak:8080/realms/epsilon/protocol/openid-connect/userinfo?scope=openid}
+    expose:
+      - 8081
+    ports:
+      - "8081:8081"
+    networks:
+      - api_internal
+      - auth_internal
+    command: pnpm service:token-handler
+    healthcheck:
+      test: "wget --no-verbose --tries=1 --spider http://localhost:${EPSILON_AUTH_TOKEN_HANDLER_PORT:-8081}${EPSILON_AUTH_API_PREFIX:-/api/v1/token} || exit 1"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1024k"
+        max-file: "10"
+  pg_admin:
+    container_name: pg_admin
+    image: dpage/pgadmin4
+    volumes:
+      - pg_admin_data:/var/lib/pgadmin
+    ports:
+      - 5050:80
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-epsilon@epsilondata.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-secret}
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+    networks:
+      - pg_auth
+      - pg_internal

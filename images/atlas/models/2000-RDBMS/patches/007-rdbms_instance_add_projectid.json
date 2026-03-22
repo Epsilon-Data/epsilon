@@ -1,0 +1,23 @@
+{
+  "patches": [
+    {
+      "id": "TYPEDEF_PATCH_2000_140",
+      "description": "Add 'projectId' attribute to rdbms_instance",
+      "action": "ADD_ATTRIBUTE",
+      "typeName": "rdbms_instance",
+      "applyToVersion": "1.9",
+      "updateToVersion": "1.10",
+      "params": null,
+      "attributeDefs": [
+        {
+          "name": "projectId",
+          "typeName": "string",
+          "isOptional": true,
+          "cardinality": "SINGLE",
+          "isUnique": true,
+          "isIndexable": true
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "patches": [
+    {
+      "id": "TYPEDEF_PATCH_2000_138",
+      "description": "Add 'crawl_status', 'status_msg', and 'status_percent' attributes to rdbms_instance",
+      "action": "ADD_ATTRIBUTE",
+      "typeName": "rdbms_instance",
+      "applyToVersion": "1.7",
+      "updateToVersion": "1.8",
+      "params": null,
+      "attributeDefs": [
+        {
+          "name": "crawl_status",
+          "typeName": "int",
+          "isOptional": true,
+          "cardinality": "SINGLE",
+          "isUnique": false,
+          "isIndexable": false,
+          "defaultValue": "1"
+        },
+        {
+          "name": "status_msg",
+          "typeName": "string",
+          "isOptional": true,
+          "cardinality": "SINGLE",
+          "isUnique": false,
+          "isIndexable": false
+        },
+        {
+          "name": "status_percent",
+          "typeName": "int",
+          "isOptional": true,
+          "cardinality": "SINGLE",
+          "isUnique": false,
+          "isIndexable": false
+        }
+      ]
+    }
+  ]
+}

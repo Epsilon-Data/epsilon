@@ -1,0 +1,446 @@
+# =============================================================================
+# Application Services (extends infrastructure in docker-compose.yml)
+# Uses pre-built Docker images — no source repos needed.
+# =============================================================================
+
+volumes:
+  pg_scheduler_data:
+  coordinator_shared:
+
+networks:
+  scheduler_internal:
+    name: "epsilon_scheduler_internal"
+  epsilon_app:
+    name: "epsilon_app"
+
+services:
+
+  # Add epsilon_app network to ALL infra services for reliable cross-service DNS
+  # IMPORTANT: must include ALL original networks — override REPLACES, not merges
+  pg_platform:
+    networks:
+      - epsilon_app
+      - pg_platform
+      - pg_internal
+  pg_auth:
+    networks:
+      - epsilon_app
+      - pg_auth
+  pg_test:
+    networks:
+      - epsilon_app
+      - pg_test
+      - pg_internal
+  pg_admin:
+    networks:
+      - epsilon_app
+      - pg_auth
+      - pg_internal
+  redis:
+    networks:
+      - epsilon_app
+      - redis_host
+  keycloak:
+    networks:
+      - epsilon_app
+      - auth_internal
+      - pg_auth
+  keycloak-config-cli:
+    networks:
+      - epsilon_app
+      - auth_internal
+  vault:
+    networks:
+      - epsilon_app
+      - vault_host
+      - auth_internal
+  vault-init:
+    networks:
+      - epsilon_app
+      - vault_host
+      - auth_internal
+  atlas-server:
+    networks:
+      - epsilon_app
+      - atlas_host
+      - metadata_internal
+      - pg_test
+  token-handler-api:
+    networks:
+      - epsilon_app
+      - frontend
+      - auth_internal
+  nginx:
+    networks:
+      - epsilon_app
+      - api_internal
+      - auth_internal
+      - metadata_internal
+  elasticsearch:
+    networks:
+      - epsilon_app
+      - elasticsearch_host
+      - metadata_internal
+  cassandra:
+    networks:
+      - epsilon_app
+      - cassandra_host
+      - metadata_internal
+  cassandra-init:
+    networks:
+      - epsilon_app
+      - cassandra_host
+  zookeeper:
+    networks:
+      - epsilon_app
+      - zookeeper_host
+      - metadata_internal
+  kafka:
+    networks:
+      - epsilon_app
+      - kafka_host
+      - metadata_internal
+  rathole:
+    networks:
+      - epsilon_app
+
+  # ===========================================================================
+  # API
+  # ===========================================================================
+
+  api-migrate:
+    image: ${API_IMAGE:-ghcr.io/epsilon-data/api:latest}
+    container_name: epsilon-api-migrate
+    restart: "no"
+    depends_on:
+      pg_platform:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${PLATFORM_POSTGRES_USER:-epsilon_admin}:${PLATFORM_POSTGRES_PASSWORD:-supersecret}@pg_platform:5432/${PLATFORM_POSTGRES_DB:-epsilon}
+    networks:
+      - epsilon_app
+      - pg_platform
+    entrypoint: ["sh", "-c", "pnpm prisma db push --accept-data-loss 2>/dev/null || pnpm prisma migrate deploy"]
+    command: []
+
+  api:
+    image: ${API_IMAGE:-ghcr.io/epsilon-data/api:latest}
+    container_name: epsilon-api
+    restart: unless-stopped
+    depends_on:
+      pg_platform:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      vault:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api-migrate:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: development
+      PORT: 3334
+      DATABASE_URL: postgresql://${PLATFORM_POSTGRES_USER:-epsilon_admin}:${PLATFORM_POSTGRES_PASSWORD:-supersecret}@pg_platform:5432/${PLATFORM_POSTGRES_DB:-epsilon}
+      VAULT_URI: http://vault:8200
+      VAULT_API_ADDR: http://vault:8200
+      VAULT_TOKEN: ${VAULT_DEV_ROOT_TOKEN_ID:-vault-plaintext-root-token}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-epsilon}
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_ADMIN_CLIENT_ID: ${EPSILON_ADMIN_API_CLIENT_ID:-epsilon-admin-api}
+      KEYCLOAK_ADMIN_CLIENT_SECRET: ${EPSILON_ADMIN_API_CLIENT_SECRET:-25WNchjDUsl9LWL6gZLLUaTQ1uIWMYMn}
+      KEYCLOAK_SDK_CLIENT_ID: ${EPSILON_SDK_CLIENT_ID:-sdk-client}
+      KEYCLOAK_SDK_CLIENT_SECRET: ${EPSILON_SDK_CLIENT_SECRET:-6nHzYqIlwcQDqDc2TuJtilucZxAH3O6N}
+      REDIS_HOST: redis-container
+      REDIS_PORT: 6379
+      COOKIE_ENCRYPTION_KEY: ${EPSILON_AUTH_COOKIE_ENCRYPTION_KEY:-e2c8470d07a8dcdcd07267e353e32805d87dd560ce93e2fae5c1869b7118e5a9}
+      ATLAS_URI: http://atlas-server:21000
+      ATLAS_ADMIN_PASSWORD: ${ATLAS_ADMIN_PASSWORD:-secret}
+      DOCKER_API_VERSION: "1.43"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "${API_PORT:-3334}:3334"
+    networks:
+      - epsilon_app
+      - pg_platform
+      - auth_internal
+      - api_internal
+      - vault_host
+      - redis_host
+      - metadata_internal
+    command: ["node", "dist/main"]
+
+  # ===========================================================================
+  # Epsilon App
+  # ===========================================================================
+
+  frontend:
+    image: ${FRONTEND_IMAGE:-ghcr.io/epsilon-data/frontend:latest}
+    container_name: epsilon-frontend
+    restart: unless-stopped
+    depends_on:
+      token-handler-api:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      api:
+        condition: service_started
+    volumes:
+      - ./images/frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    networks:
+      - epsilon_app
+      - frontend
+      - api_internal
+      - auth_internal
+
+  # ===========================================================================
+  # JOB SCHEDULER (Research Workspace)
+  # ===========================================================================
+
+  pg_scheduler:
+    image: postgres:16-alpine
+    container_name: pg_scheduler
+    restart: unless-stopped
+    volumes:
+      - pg_scheduler_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${SCHEDULER_POSTGRES_DB:-scheduler}
+      POSTGRES_USER: ${SCHEDULER_POSTGRES_USER:-scheduler}
+      POSTGRES_PASSWORD: ${SCHEDULER_POSTGRES_PASSWORD:-scheduler}
+    networks:
+      - epsilon_app
+      - scheduler_internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SCHEDULER_POSTGRES_USER:-scheduler}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  scheduler-migrate:
+    image: ${JOB_SCHEDULER_IMAGE:-ghcr.io/epsilon-data/job-scheduler:latest}
+    container_name: epsilon-scheduler-migrate
+    restart: "no"
+    depends_on:
+      pg_scheduler:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${SCHEDULER_POSTGRES_USER:-scheduler}:${SCHEDULER_POSTGRES_PASSWORD:-scheduler}@pg_scheduler:5432/${SCHEDULER_POSTGRES_DB:-scheduler}
+    networks:
+      - epsilon_app
+      - scheduler_internal
+    entrypoint: ["sh", "-c", "npx drizzle-kit push --force"]
+    command: []
+
+  job-scheduler:
+    image: ${JOB_SCHEDULER_IMAGE:-ghcr.io/epsilon-data/job-scheduler:latest}
+    container_name: epsilon-job-scheduler
+    restart: unless-stopped
+    depends_on:
+      pg_scheduler:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      scheduler-migrate:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      PORT: 3005
+      COOKIE_SECURE: "false"
+      SESSION_SECRET: ${SESSION_SECRET:-dev-session-secret-change-me}
+      DATABASE_URL: postgresql://${SCHEDULER_POSTGRES_USER:-scheduler}:${SCHEDULER_POSTGRES_PASSWORD:-scheduler}@pg_scheduler:5432/${SCHEDULER_POSTGRES_DB:-scheduler}
+      KEYCLOAK_BASE_URL: http://keycloak:8080
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-epsilon}
+      KEYCLOAK_AUTH_URL: http://keycloak:8080/realms/${KEYCLOAK_REALM:-epsilon}/protocol/openid-connect/auth
+      KEYCLOAK_TOKEN_URL: http://keycloak:8080/realms/${KEYCLOAK_REALM:-epsilon}/protocol/openid-connect/token
+      KEYCLOAK_CLIENT_ID: ${JOBSCHEDULER_OAUTH_CLIENT_ID:-jobscheduler-oauth}
+      KEYCLOAK_CLIENT_SECRET: ${JOBSCHEDULER_OAUTH_CLIENT_SECRET:-OjZwdTpS8RyT1qy07ccU88QBxJSLZC27}
+      KEYCLOAK_REDIRECT_URI: http://localhost:3005/api/auth/callback
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      GITHUB_REDIRECT_URI: ${GITHUB_REDIRECT_URI:-http://localhost:3005/api/github/callback}
+      AI_ENABLED: "true"
+      ZKP_ENABLED: "false"
+    ports:
+      - "${JOB_SCHEDULER_PORT:-3005}:3005"
+    networks:
+      - epsilon_app
+      - scheduler_internal
+      - auth_internal
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3005/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ===========================================================================
+  # MIDDLEWARE (Data Fetch Service)
+  # ===========================================================================
+  middleware:
+    image: ${MIDDLEWARE_IMAGE:-ghcr.io/epsilon-data/epsilon-middleware:local}
+    container_name: epsilon-middleware
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      pg_platform:
+        condition: service_healthy
+      vault:
+        condition: service_healthy
+    environment:
+      MIDDLEWARE_HOST: "0.0.0.0"
+      MIDDLEWARE_PORT: "8001"
+      EPSILON_API_BASE_URL: http://epsilon-api:3334/api/v1
+      EPSILON_CLIENT_ID: ${EPSILON_COORDINATOR_CLIENT_ID:-coordinator-client}
+      EPSILON_CLIENT_SECRET: ${EPSILON_COORDINATOR_CLIENT_SECRET:-2MkLHmnKck3orcVfhGhp4IWM1GOpJ7Wl}
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: ${VAULT_DEV_ROOT_TOKEN_ID:-vault-plaintext-root-token}
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-epsilon}
+    ports:
+      - "8001:8001"
+    networks:
+      - epsilon_app
+      - pg_platform
+      - api_internal
+      - vault_host
+
+  # ===========================================================================
+  # COORDINATOR (Job Processing Workers)
+  # ===========================================================================
+  coordinator-fetcher:
+    image: ${COORDINATOR_IMAGE:-ghcr.io/epsilon-data/coordinator:latest}
+    container_name: epsilon-fetcher
+    restart: unless-stopped
+    depends_on:
+      pg_scheduler:
+        condition: service_healthy
+      scheduler-migrate:
+        condition: service_completed_successfully
+    environment:
+      WORKER_MODE: fetcher
+      DATABASE_URL: postgresql://${SCHEDULER_POSTGRES_USER:-scheduler}:${SCHEDULER_POSTGRES_PASSWORD:-scheduler}@pg_scheduler:5432/${SCHEDULER_POSTGRES_DB:-scheduler}
+      POLLING_INTERVAL: ${POLLING_INTERVAL:-5}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    networks:
+      - epsilon_app
+      - scheduler_internal
+
+  coordinator-clone:
+    image: ${COORDINATOR_IMAGE:-ghcr.io/epsilon-data/coordinator:latest}
+    container_name: epsilon-clone
+    restart: unless-stopped
+    depends_on:
+      pg_scheduler:
+        condition: service_healthy
+      scheduler-migrate:
+        condition: service_completed_successfully
+    environment:
+      WORKER_MODE: clone
+      DATABASE_URL: postgresql://${SCHEDULER_POSTGRES_USER:-scheduler}:${SCHEDULER_POSTGRES_PASSWORD:-scheduler}@pg_scheduler:5432/${SCHEDULER_POSTGRES_DB:-scheduler}
+      SHARED_STORAGE_PATH: /shared/epsilon
+      POLLING_INTERVAL: ${POLLING_INTERVAL:-5}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - coordinator_shared:/shared/epsilon
+    networks:
+      - epsilon_app
+      - scheduler_internal
+
+  coordinator-executor:
+    image: ${COORDINATOR_IMAGE:-ghcr.io/epsilon-data/coordinator:latest}
+    container_name: epsilon-executor
+    restart: unless-stopped
+    depends_on:
+      pg_scheduler:
+        condition: service_healthy
+      scheduler-migrate:
+        condition: service_completed_successfully
+    environment:
+      WORKER_MODE: executor
+      DATABASE_URL: postgresql://${SCHEDULER_POSTGRES_USER:-scheduler}:${SCHEDULER_POSTGRES_PASSWORD:-scheduler}@pg_scheduler:5432/${SCHEDULER_POSTGRES_DB:-scheduler}
+      SHARED_STORAGE_PATH: /shared/epsilon
+      POLLING_INTERVAL: ${POLLING_INTERVAL:-5}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      USE_LOCAL_ENCLAVE: "true"
+      ENCLAVE_VSOCK_PORT: 5005
+      MIDDLEWARE_ENDPOINT_URL: http://epsilon-middleware:8001/fetch-csv
+      MIDDLEWARE_MODE: local
+      MIDDLEWARE_DIRECT_DB: "false"
+      MIDDLEWARE_TIMEOUT_SECONDS: 60
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: ${VAULT_DEV_ROOT_TOKEN_ID:-vault-plaintext-root-token}
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-epsilon}
+      KEYCLOAK_CLIENT_ID: ${EPSILON_COORDINATOR_CLIENT_ID:-coordinator-client}
+      KEYCLOAK_CLIENT_SECRET: ${EPSILON_COORDINATOR_CLIENT_SECRET:-2MkLHmnKck3orcVfhGhp4IWM1GOpJ7Wl}
+    volumes:
+      - coordinator_shared:/shared/epsilon
+    networks:
+      - epsilon_app
+      - scheduler_internal
+      - pg_platform
+      - api_internal
+      - vault_host
+      - auth_internal
+
+  coordinator-ai-agent:
+    image: ${COORDINATOR_IMAGE:-ghcr.io/epsilon-data/coordinator:latest}
+    container_name: epsilon-ai-agent
+    restart: unless-stopped
+    depends_on:
+      pg_scheduler:
+        condition: service_healthy
+      scheduler-migrate:
+        condition: service_completed_successfully
+    environment:
+      WORKER_MODE: ai
+      DATABASE_URL: postgresql://${SCHEDULER_POSTGRES_USER:-scheduler}:${SCHEDULER_POSTGRES_PASSWORD:-scheduler}@pg_scheduler:5432/${SCHEDULER_POSTGRES_DB:-scheduler}
+      SHARED_STORAGE_PATH: /shared/epsilon
+      POLLING_INTERVAL: "60"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      CREWAI_LLM_MODEL: ${CREWAI_LLM_MODEL:-gpt-4o-mini}
+    volumes:
+      - coordinator_shared:/shared/epsilon
+    networks:
+      - epsilon_app
+      - scheduler_internal
+
+  # ===========================================================================
+  # TRUST CENTER (Verification Center)
+  # ===========================================================================
+  trust-center:
+    image: ${TRUST_CENTER_IMAGE:-ghcr.io/epsilon-data/epsilon-trust-center:latest}
+    container_name: epsilon-trust-center
+    restart: unless-stopped
+    depends_on:
+      pg_scheduler:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${SCHEDULER_POSTGRES_USER:-scheduler}:${SCHEDULER_POSTGRES_PASSWORD:-scheduler}@pg_scheduler:5432/${SCHEDULER_POSTGRES_DB:-scheduler}
+      DATABASE_SSL: "false"
+      DATABASE_POOL_MAX: 5
+      PORT: 3001
+      RATE_LIMIT_MAX: 100
+      GITHUB_OWNER: Epsilon-Data
+      GITHUB_REPO: epsilon-enclave
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      DEV_MODE: ${DEV_MODE:-true}
+      LOCAL_ROOT_CERT_PEM: ${LOCAL_ROOT_CERT_PEM:-}
+    ports:
+      - "${TRUST_CENTER_PORT:-3001}:3001"
+    networks:
+      - epsilon_app
+      - scheduler_internal
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/stats"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s

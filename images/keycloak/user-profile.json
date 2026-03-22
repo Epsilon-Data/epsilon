@@ -1,0 +1,54 @@
+{
+  "attributes": [
+    {
+      "name": "username",
+      "displayName": "Username",
+      "required": { "roles": ["user"] },
+      "permissions": {
+        "view": ["admin", "user"],
+        "edit": ["admin"]
+      },
+      "validations": {
+        "length": { "min": 1, "max": 255 }
+      }
+    },
+    {
+      "name": "email",
+      "displayName": "Email",
+      "required": { "roles": ["user"] },
+      "permissions": {
+        "view": ["admin", "user"],
+        "edit": ["admin", "user"]
+      },
+      "validations": { "email": {} }
+    },
+    {
+      "name": "firstName",
+      "displayName": "First name",
+      "required": { "roles": ["user"] },
+      "permissions": { "view": ["admin", "user"], "edit": ["admin", "user"] },
+      "validations": { "length": { "min": 1, "max": 255 } }
+    },
+    {
+      "name": "lastName",
+      "displayName": "Last name",
+      "required": { "roles": ["user"] },
+      "permissions": { "view": ["admin", "user"], "edit": ["admin", "user"] },
+      "validations": { "length": { "min": 1, "max": 255 } }
+    },
+    {
+      "name": "institution",
+      "displayName": "Institution/Organisation",
+      "required": { "roles": ["user"] },
+      "permissions": { "view": ["admin", "user"], "edit": ["admin", "user"] },
+      "validations": { "length": { "min": 1, "max": 255 } }
+    },
+    {
+      "name": "jobTitle",
+      "displayName": "Job title",
+      "required": { "roles": ["user"] },
+      "permissions": { "view": ["admin", "user"], "edit": ["admin", "user"] },
+      "validations": { "length": { "min": 1, "max": 255 } }
+    }
+  ]
+}

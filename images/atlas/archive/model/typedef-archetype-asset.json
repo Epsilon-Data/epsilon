@@ -1,0 +1,399 @@
+{
+  "classificationDefs": [
+    {
+      "category": "CLASSIFICATION",
+      "name": "object_node",
+      "description": "Used for classifying an object node",
+      "typeVersion": "1.0",
+      "attributeDefs": [],
+      "superTypes": []
+    },
+    {
+      "category": "CLASSIFICATION",
+      "name": "category_node",
+      "description": "Used for classifying a category node",
+      "typeVersion": "1.0",
+      "attributeDefs": [],
+      "superTypes": []
+    },
+    {
+      "category": "CLASSIFICATION",
+      "name": "subcategory_node",
+      "description": "Used for classifying a subcategory node",
+      "typeVersion": "1.0",
+      "attributeDefs": [],
+      "superTypes": []
+    }
+  ],
+  "entityDefs": [
+    {
+      "superTypes": ["Referenceable"],
+      "category": "ENTITY",
+      "name": "archetype",
+      "description": "a type definition for archetype",
+      "typeVersion": "1.0",
+      "attributeDefs": [
+        {
+          "name": "isActive",
+          "typeName": "boolean",
+          "isOptional": true,
+          "cardinality": "SINGLE",
+          "valuesMinCount": 1,
+          "valuesMaxCount": 1,
+          "defaultValue": true,
+          "isUnique": false,
+          "isIndexable": false
+        }
+      ]
+    },
+    {
+      "superTypes": ["Asset"],
+      "category": "ENTITY",
+      "name": "archetype_category",
+      "description": "a type definition for archetype category node",
+      "typeVersion": "1.0",
+      "attributeDefs": [
+        {
+          "name": "position",
+          "typeName": "map<string,string>",
+          "isOptional": false,
+          "cardinality": "SINGLE",
+          "valuesMinCount": 1,
+          "valuesMaxCount": 1,
+          "isUnique": false,
+          "isIndexable": false
+        },
+        {
+          "name": "label",
+          "typeName": "string",
+          "isOptional": false,
+          "cardinality": "SINGLE",
+          "valuesMinCount": 1,
+          "valuesMaxCount": -1,
+          "isUnique": false,
+          "isIndexable": true
+        },
+        {
+          "name": "width",
+          "typeName": "int",
+          "isOptional": false,
+          "cardinality": "SINGLE",
+          "valuesMinCount": 1,
+          "valuesMaxCount": 1,
+          "isUnique": false,
+          "isIndexable": false
+        },
+        {
+          "name": "height",
+          "typeName": "int",
+          "isOptional": false,
+          "cardinality": "SINGLE",
+          "valuesMinCount": 1,
+          "valuesMaxCount": 1,
+          "isUnique": false,
+          "isIndexable": false
+        },
+        {
+          "name": "selected",
+          "typeName": "boolean",
+          "isOptional": false,
+          "cardinality": "SINGLE",
+          "valuesMinCount": 1,
+          "valuesMaxCount": 1,
+          "isUnique": false,
+          "isIndexable": false
+        },
+        {
+          "name": "dragging",
+          "typeName": "boolean",
+          "isOptional": false,
+          "cardinality": "SINGLE",
+          "valuesMinCount": 1,
+          "valuesMaxCount": 1,
+          "isUnique": false,
+          "isIndexable": false
+        }
+      ]
+    },
+    {
+      "superTypes": ["Asset"],
+      "category": "ENTITY",
+      "name": "archetype_subcategory",
+      "description": "a type definition for archetype subcategory node",
+      "typeVersion": "1.0",
+      "attributeDefs": [
+        {
+          "name": "position",
+          "typeName": "map<string,string>",
+          "isOptional": false,
+          "cardinality": "SINGLE",
+          "valuesMinCount": 1,
+          "valuesMaxCount": 1,
+          "isUnique": false,
+          "isIndexable": false
+        },
+        {
+          "name": "label",
+          "typeName": "string",
+          "isOptional": false,
+          "cardinality": "SINGLE",
+          "valuesMinCount": 1,
+          "valuesMaxCount": -1,
+          "isUnique": false,
+          "isIndexable": true
+        },
+        {
+          "name": "width",
+          "typeName": "int",
+          "isOptional": false,
+          "cardinality": "SINGLE",
+          "valuesMinCount": 1,
+          "valuesMaxCount": 1,
+          "isUnique": false,
+          "isIndexable": false
+        },
+        {
+          "name": "height",
+          "typeName": "int",
+          "isOptional": false,
+          "cardinality": "SINGLE",
+          "valuesMinCount": 1,
+          "valuesMaxCount": 1,
+          "isUnique": false,
+          "isIndexable": false
+        },
+        {
+          "name": "selected",
+          "typeName": "boolean",
+          "isOptional": false,
+          "cardinality": "SINGLE",
+          "valuesMinCount": 1,
+          "valuesMaxCount": 1,
+          "isUnique": false,
+          "isIndexable": false
+        },
+        {
+          "name": "dragging",
+          "typeName": "boolean",
+          "isOptional": false,
+          "cardinality": "SINGLE",
+          "valuesMinCount": 1,
+          "valuesMaxCount": 1,
+          "isUnique": false,
+          "isIndexable": false
+        }
+      ]
+    },
+    {
+      "superTypes": ["Asset"],
+      "category": "ENTITY",
+      "name": "permission",
+      "description": "a type definition for permission",
+      "typeVersion": "1.0",
+      "attributeDefs": []
+    }
+  ],
+  "relationshipDefs": [
+    {
+      "category": "RELATIONSHIP",
+      "name": "archetype_category_rdbms_columns",
+      "description": "archetype_category_rdbms_columns",
+      "typeVersion": "1.0",
+      "serviceType": "archetypes",
+      "attributeDefs": [],
+      "relationshipCategory": "ASSOCIATION",
+      "relationshipLabel": "__archetype_category.columns",
+      "propagateTags": "NONE",
+      "endDef1": {
+        "type": "archetype_category",
+        "name": "columns",
+        "isContainer": false,
+        "cardinality": "SET",
+        "isLegacyAttribute": true
+      },
+      "endDef2": {
+        "type": "rdbms_column",
+        "name": "category",
+        "isContainer": false,
+        "cardinality": "SINGLE",
+        "isLegacyAttribute": true
+      }
+    },
+    {
+      "category": "RELATIONSHIP",
+      "name": "archetype_subcategory_rdbms_columns",
+      "description": "archetype_subcategory_rdbms_columns",
+      "typeVersion": "1.0",
+      "serviceType": "archetypes",
+      "attributeDefs": [],
+      "relationshipCategory": "ASSOCIATION",
+      "relationshipLabel": "__archetype_subcategory.columns",
+      "propagateTags": "NONE",
+      "endDef1": {
+        "type": "archetype_subcategory",
+        "name": "columns",
+        "isContainer": false,
+        "cardinality": "SET",
+        "isLegacyAttribute": true
+      },
+      "endDef2": {
+        "type": "rdbms_column",
+        "name": "category",
+        "isContainer": false,
+        "cardinality": "SINGLE",
+        "isLegacyAttribute": true
+      }
+    },
+    {
+      "category": "RELATIONSHIP",
+      "name": "archetype_category_subcategories",
+      "description": "archetype_category_subcategories",
+      "typeVersion": "1.0",
+      "serviceType": "archetypes",
+      "attributeDefs": [],
+      "relationshipCategory": "COMPOSITION",
+      "relationshipLabel": "__category_category.subcategories",
+      "propagateTags": "NONE",
+      "endDef1": {
+        "type": "archetype_category",
+        "name": "subcategories",
+        "isContainer": true,
+        "cardinality": "SET",
+        "isLegacyAttribute": true
+      },
+      "endDef2": {
+        "type": "archetype_subcategory",
+        "name": "category",
+        "isContainer": false,
+        "cardinality": "SINGLE",
+        "isLegacyAttribute": true
+      }
+    },
+    {
+      "category": "RELATIONSHIP",
+      "name": "rdbms_instance_archetypes",
+      "description": "rdbms_instance_archetypes",
+      "typeVersion": "1.0",
+      "serviceType": "archetypes",
+      "attributeDefs": [],
+      "relationshipCategory": "COMPOSITION",
+      "relationshipLabel": "__rdbms_instance.archetypes",
+      "propagateTags": "NONE",
+      "endDef1": {
+        "type": "rdbms_instance",
+        "name": "archetypes",
+        "isContainer": true,
+        "cardinality": "SET",
+        "isLegacyAttribute": true
+      },
+      "endDef2": {
+        "type": "archetype",
+        "name": "instance",
+        "isContainer": false,
+        "cardinality": "SINGLE",
+        "isLegacyAttribute": true
+      }
+    },
+    {
+      "category": "RELATIONSHIP",
+      "name": "archetype_template_categories",
+      "description": "archetype_template_categories",
+      "typeVersion": "1.0",
+      "serviceType": "archetypes",
+      "attributeDefs": [],
+      "relationshipCategory": "COMPOSITION",
+      "relationshipLabel": "__archetype_template.categories",
+      "propagateTags": "NONE",
+      "endDef1": {
+        "type": "archetype",
+        "name": "categories",
+        "isContainer": true,
+        "cardinality": "SET",
+        "isLegacyAttribute": true
+      },
+      "endDef2": {
+        "type": "archetype_category",
+        "name": "archetype",
+        "isContainer": false,
+        "cardinality": "SINGLE",
+        "isLegacyAttribute": true
+      }
+    },
+    {
+      "category": "RELATIONSHIP",
+      "name": "archetype_template_subcategories",
+      "description": "archetype_template_subcategories",
+      "typeVersion": "1.0",
+      "serviceType": "archetypes",
+      "attributeDefs": [],
+      "relationshipCategory": "COMPOSITION",
+      "relationshipLabel": "__archetype_template.subcategories",
+      "propagateTags": "NONE",
+      "endDef1": {
+        "type": "archetype",
+        "name": "subcategories",
+        "isContainer": true,
+        "cardinality": "SET",
+        "isLegacyAttribute": true
+      },
+      "endDef2": {
+        "type": "archetype_subcategory",
+        "name": "archetype",
+        "isContainer": false,
+        "cardinality": "SINGLE",
+        "isLegacyAttribute": true
+      }
+    },
+    {
+      "category": "RELATIONSHIP",
+      "name": "archetype_category_permissions",
+      "description": "archetype_category_permissions",
+      "typeVersion": "1.0",
+      "serviceType": "archetypes",
+      "attributeDefs": [],
+      "relationshipCategory": "ASSOCIATION",
+      "relationshipLabel": "__archetype_category.permissions",
+      "propagateTags": "NONE",
+      "endDef1": {
+          "type": "archetype_category",
+          "name": "permissions",
+          "isContainer": false,
+          "cardinality": "SET",
+          "isLegacyAttribute": true
+      },
+      "endDef2": {
+          "type": "permission",
+          "name": "category",
+          "isContainer": false,
+          "cardinality": "SET",
+          "isLegacyAttribute": true
+      }
+    },
+    {
+      "category": "RELATIONSHIP",
+      "version": 1,
+      "name": "archetype_subcategory_permissions",
+      "description": "archetype_subcategory_permissions",
+      "typeVersion": "1.0",
+      "serviceType": "archetypes",
+      "attributeDefs": [],
+      "relationshipCategory": "ASSOCIATION",
+      "relationshipLabel": "__archetype_subcategory.permissions",
+      "propagateTags": "NONE",
+      "endDef1": {
+          "type": "archetype_subcategory",
+          "name": "permissions",
+          "isContainer": false,
+          "cardinality": "SET",
+          "isLegacyAttribute": true
+      },
+      "endDef2": {
+          "type": "permission",
+          "name": "subcategory",
+          "isContainer": false,
+          "cardinality": "SET",
+          "isLegacyAttribute": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "patches": [
+    {
+      "id": "TYPEDEF_PATCH_3000_003",
+      "description": "Add node type enum attribute to archetype_node",
+      "action": "ADD_ATTRIBUTE",
+      "typeName": "archetype_node",
+      "applyToVersion": "1.0",
+      "updateToVersion": "1.1",
+      "params": null,
+      "attributeDefs": [
+        {
+          "name": "type",
+          "typeName": "node_type",
+          "isOptional": true,
+          "cardinality": "SINGLE",
+          "valuesMinCount": 1,
+          "valuesMaxCount": 1,
+          "isUnique": false,
+          "isIndexable": true
+        }
+      ]
+    }
+  ]
+}

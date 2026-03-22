@@ -1,0 +1,10 @@
+.env
+.env.local
+.env.*.local
+.DS_Store
+.idea/
+.claude/
+*.log
+atlas-logs/
+rathole-config/
+images/postgresql/seaco_testing_database.sql
