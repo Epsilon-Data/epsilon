@@ -37,9 +37,9 @@ up: ## Start all services (infra first, then apps)
 	@echo "══════════════════════════════════════════════════════"
 	@echo "  Phase 1/3: Starting infrastructure..."
 	@echo "══════════════════════════════════════════════════════"
-	$(COMPOSE) up -d $(INFRA_SERVICES)
 	@echo ""
-	@echo "  Waiting for databases..."
+	@echo "  Step 1: Databases & Redis..."
+	$(COMPOSE) up -d pg_platform pg_auth pg_test redis
 	@until docker inspect pg_platform --format '{{.State.Health.Status}}' 2>/dev/null | grep -q healthy; do sleep 2; done
 	@echo "  pg_platform: healthy"
 	@until docker inspect pg_auth --format '{{.State.Health.Status}}' 2>/dev/null | grep -q healthy; do sleep 2; done
@@ -47,17 +47,35 @@ up: ## Start all services (infra first, then apps)
 	@until docker inspect redis-container --format '{{.State.Health.Status}}' 2>/dev/null | grep -q healthy; do sleep 2; done
 	@echo "  redis:       healthy"
 	@echo ""
-	@echo "  Waiting for Keycloak & Vault..."
+	@echo "  Step 2: Keycloak & Vault..."
+	$(COMPOSE) up -d keycloak vault
 	@until docker inspect keycloak --format '{{.State.Health.Status}}' 2>/dev/null | grep -q healthy; do sleep 3; done
 	@echo "  keycloak:    healthy"
 	@until docker inspect vault --format '{{.State.Health.Status}}' 2>/dev/null | grep -q healthy; do sleep 2; done
 	@echo "  vault:       healthy"
+	$(COMPOSE) up -d keycloak-config-cli vault-init token-handler-api
 	@echo ""
-	@echo "  Waiting for Atlas (this takes several minutes, check http://localhost:21000)..."
+	@echo "  Step 3: Metadata stack (Cassandra → Zookeeper → Kafka → Elasticsearch → Atlas)..."
+	$(COMPOSE) up -d cassandra elasticsearch
+	@until docker inspect cassandra --format '{{.State.Health.Status}}' 2>/dev/null | grep -q healthy; do sleep 5; done
+	@echo "  cassandra:      healthy"
+	@until docker inspect elasticsearch --format '{{.State.Health.Status}}' 2>/dev/null | grep -q healthy; do sleep 5; done
+	@echo "  elasticsearch:  healthy"
+	$(COMPOSE) up -d cassandra-init zookeeper
+	@until docker inspect zookeeper --format '{{.State.Health.Status}}' 2>/dev/null | grep -q healthy; do sleep 3; done
+	@echo "  zookeeper:      healthy"
+	$(COMPOSE) up -d kafka
+	@until docker inspect kafka --format '{{.State.Health.Status}}' 2>/dev/null | grep -q healthy; do sleep 5; done
+	@echo "  kafka:          healthy"
+	$(COMPOSE) up -d atlas-server
+	@echo ""
+	@echo "  Step 4: Remaining infra..."
+	$(COMPOSE) up -d pg_admin nginx rathole mailhog
+	@echo "  Waiting for Atlas (this takes several minutes on first run)..."
 	@until docker exec atlas-server test -f /opt/atlas/state/.initDone 2>/dev/null; do sleep 10; done
-	@echo "  atlas:       init done, waiting for final startup..."
+	@echo "  atlas:          init done, waiting for final startup..."
 	@until docker inspect atlas-server --format '{{.State.Health.Status}}' 2>/dev/null | grep -q healthy; do sleep 10; done
-	@echo "  atlas:       healthy"
+	@echo "  atlas:          healthy"
 	@echo ""
 	@echo "══════════════════════════════════════════════════════"
 	@echo "  Phase 2/3: Running database migrations..."

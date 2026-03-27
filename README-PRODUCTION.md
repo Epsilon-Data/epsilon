@@ -145,6 +145,43 @@ You can independently verify any attestation document:
 | Trust Hub verification | All checks pass | Certificate chain fails (expected) |
 | Data transport | epsilon-proxy (source-side encryption) or Lambda middleware | Local HTTP middleware |
 
+---
+
+## Standalone Verification (no platform required)
+
+Verify any Nitro attestation document independently — no Epsilon account, no platform access needed:
+
+**JavaScript/Browser:**
+```bash
+npm install @epsilon-data/nitro-verify
+```
+```javascript
+import { verifyAttestation } from "@epsilon-data/nitro-verify";
+const result = await verifyAttestation(base64Doc, {
+    expectedPcrs: { pcr0: "a537..." },
+    allowExpired: true  // historical attestations have ~3hr cert lifetime
+});
+console.log(result.valid, result.steps);
+```
+
+**Python/CLI:**
+```bash
+pip install epsilon-attestation-verifier
+```
+```python
+from epsilon_verifier import verify_attestation
+result = verify_attestation(
+    attestation_doc="<base64>",
+    expected_pcr0="a537...",
+    allow_expired=True
+)
+print(result.valid, result.pcr0)
+```
+
+These packages work with **any** AWS Nitro Enclave attestation — not just Epsilon.
+
+---
+
 ## Notes
 
 - Production uses **real AWS Nitro Enclaves** — attestation documents are hardware-signed and cryptographically verifiable
