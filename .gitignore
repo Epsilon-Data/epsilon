@@ -8,4 +8,4 @@
 atlas-logs/
 rathole-config/
 images/postgresql/seaco_testing_database.sql
-seed/
+seed/data/
