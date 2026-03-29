@@ -172,10 +172,8 @@ services:
   atlas-server:
     container_name: atlas-server
     image: aarepuu/atlas
-    # build: ../../atlas
     profiles: [metadata]
     restart: unless-stopped
-    user: "0:0"
     volumes:
       - ./images/atlas/conf/atlas-env.sh:/opt/atlas/conf/atlas-env.sh:ro
       - ./images/atlas/conf/log4j.properties:/opt/atlas/conf/log4j.properties:ro
@@ -189,12 +187,7 @@ services:
       - ./images/atlas/seed:/seed
       - ./images/atlas/import/:/tmp/import
       - ./atlas-logs:/opt/atlas/logs
-    entrypoint:
-      [
-        "sh",
-        "-c",
-        "chown -R 1000:1000 /opt/atlas/state && rm -f /opt/atlas/logs/atlas.pid && exec su -s /bin/bash atlas -c '/entrypoint.sh'",
-      ]
+    entrypoint: ["/entrypoint.sh"]
     expose:
       - 21000
     ports:
