@@ -51,12 +51,6 @@ networks:
     name: "epsilon_metadata_internal"
   frontend:
     name: "epsilon_frontend"
-  # rabbit_host:
-  #   driver: bridge
-  # rabbit_internal:
-  #   name: "epsilon_rabbit_internal"
-  # pg_external:
-  #   external: true
 
 # list of services
 services:
@@ -402,6 +396,7 @@ services:
       KC_HTTP_RELATIVE_PATH: ${KC_HTTP_RELATIVE_PATH:-/}
       KC_HOSTNAME_STRICT: ${KC_HOSTNAME_STRICT:-false}
       KC_PROXY_HEADERS: ${KC_PROXY_HEADERS:-xforwarded}
+      KC_PROXY_TRUSTED_ADDRESSES: ${KC_PROXY_TRUSTED_ADDRESSES:-127.0.0.1,172.0.0.0/8}
       KC_HTTP_ENABLED: ${KC_HTTP_ENABLED:-true}
       # Metrics and logs
       KC_HOSTNAME_DEBUG: ${KC_HOSTNAME_DEBUG:-true}
@@ -445,7 +440,6 @@ services:
     command:
       - start
       - -Dkeycloak.import=/opt/keycloak/data/import
-
   keycloak-config-cli:
     container_name: keycloak-config-cli
     image: adorsys/keycloak-config-cli:latest-25.0.1

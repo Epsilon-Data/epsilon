@@ -42,6 +42,8 @@ echo "[kc] Applying user profile schema to realm: ${REALM}"
   --user "${KEYCLOAK_ADMIN}" \
   --password "${KEYCLOAK_ADMIN_PASSWORD}" >/dev/null
 
+/opt/keycloak/bin/kcadm.sh update realms/master -s sslRequired=NONE >/dev/null
+
 /opt/keycloak/bin/kcadm.sh update users/profile \
   -r "${REALM}" \
   -f "${PROFILE_JSON}" >/dev/null

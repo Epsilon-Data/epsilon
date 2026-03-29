@@ -2,7 +2,7 @@
   "realm": "$(env:KEYCLOAK_REALM)",
   "notBefore": 0,
   "enabled": true,
-  "sslRequired": "external",
+  "sslRequired": "none",
   "registrationAllowed": true,
   "accessTokenLifespan": "$(env:KEYCLOAK_ACCESS_TOKEN_LIFESPAN)",
   "registrationEmailAsUsername": true,
@@ -918,12 +918,7 @@
       "publicClient": false,
       "frontchannelLogout": false,
       "protocol": "openid-connect",
-      "defaultClientScopes": [
-        "web-origins",
-        "acr",
-        "profile",
-        "email"
-      ],
+      "defaultClientScopes": ["web-origins", "acr", "profile", "email"],
       "optionalClientScopes": [
         "address",
         "phone",
