@@ -41,18 +41,24 @@ while true; do
 done
 
 echo "Seeding roles..."
-# create new admin_user (epsilon)
-cqlsh "$HOST" "$PORT" -u cassandra -p "$ADMIN_PASS" <<EOF
-  CREATE ROLE IF NOT EXISTS epsilon
-  WITH PASSWORD = '${CASSANDRA_EPSILON_PASSWORD}'
-  AND SUPERUSER = true
-  AND LOGIN = true;
+ROLE_EXISTS=$(cqlsh "$HOST" "$PORT" -u cassandra -p "$ADMIN_PASS" \
+  -e "SELECT role FROM system_auth.roles WHERE role='epsilon';" 2>/dev/null | grep -c epsilon || true)
 
-  -- enforce desired state on reruns
-  ALTER ROLE epsilon WITH PASSWORD = '${CASSANDRA_EPSILON_PASSWORD}';
-  ALTER ROLE epsilon WITH SUPERUSER = true;
-  ALTER ROLE epsilon WITH LOGIN = true;
+if [ "$ROLE_EXISTS" -eq 0 ]; then
+  cqlsh "$HOST" "$PORT" -u cassandra -p "$ADMIN_PASS" <<EOF
+    CREATE ROLE epsilon
+    WITH PASSWORD = '${CASSANDRA_EPSILON_PASSWORD}'
+    AND SUPERUSER = true
+    AND LOGIN = true;
 EOF
+else
+  sleep 6
+  cqlsh "$HOST" "$PORT" -u cassandra -p "$ADMIN_PASS" <<EOF
+    ALTER ROLE epsilon WITH PASSWORD = '${CASSANDRA_EPSILON_PASSWORD}';
+    ALTER ROLE epsilon WITH SUPERUSER = true;
+    ALTER ROLE epsilon WITH LOGIN = true;
+EOF
+fi
 
 echo "Done initialising Cassandra!"
 echo "#############################################################################"
