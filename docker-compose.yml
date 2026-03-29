@@ -18,8 +18,6 @@ volumes:
     driver: local
   redis_data:
     driver: local
-  atlas_state:
-    driver: local
 
 # list of networks
 networks:
@@ -182,7 +180,7 @@ services:
       - ./images/atlas/scripts:/opt/atlas/scripts:ro
       - ./images/atlas/entrypoint.sh:/entrypoint.sh:ro
       # atlas init state
-      - atlas_state:/opt/atlas/state
+      - ./images/atlas/state:/opt/atlas/state
       # TODO: remove in prod
       - ./images/atlas/seed:/seed
       - ./images/atlas/import/:/tmp/import
