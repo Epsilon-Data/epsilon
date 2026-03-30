@@ -175,7 +175,9 @@ Docs: [epsilon-proxy](https://github.com/Epsilon-Data/epsilon-proxy) | Releases:
 
 ## License
 
-Epsilon is licensed under the [MIT License](LICENSE).
+Epsilon is provided under the [MIT License](https://github.com/Epsilon-Data/epsilon/blob/main/LICENSE)
+
+Apache Atlas is provided under the [Apache License 2.0](https://github.com/apache/atlas/blob/master/LICENSE)
 
 ### Third-Party Software
 
