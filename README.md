@@ -200,4 +200,3 @@ Epsilon uses the following open-source software:
 | [keycloak-config-cli](https://github.com/adorsys/keycloak-config-cli) | Apache 2.0 | Keycloak realm provisioning |
 
 The frontend is built using a template from [Minimal UI](https://minimals.cc/) by Minimals.
->>>>>>> 707255b (chore: add MIT license)
