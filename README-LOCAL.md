@@ -125,10 +125,17 @@ Researchers submit jobs from GitHub repositories. You need a GitHub OAuth app:
 ### 3. Prepare a Research Repository
 
 1. Fork or use the [epsilon-research-template](https://github.com/Epsilon-Data/epsilon-research-template) as a template on GitHub
-2. Install the Epsilon SDK: `pip install epsilon-sdk`
-3. Configure your analysis in `build/build.yml` with the dataset ID and archetype ID from step 2
-4. Write your analysis script in `build/main.py` using the SDK
-5. Push your code to GitHub
+2. Install the Epsilon SDK and initialize:
+   ```bash
+   pip install epsilon-sdk
+   epsilon change-server http://localhost:3334    # Point to local instance
+   epsilon login                                   # Authenticate (researcher@epsilon-data.org / secret)
+   epsilon init <dataset_id>                       # Generates project.yml, main.py, generated/
+   ```
+3. Edit `main.py` with your analysis code
+4. Test locally: `epsilon run` (runs against synthetic data)
+5. Build for deployment: `epsilon build` (creates `build/` directory)
+6. Push your code to GitHub
 
 ### 4. Submit a Research Job
 

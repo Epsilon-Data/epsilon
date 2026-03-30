@@ -1,5 +1,5 @@
 // Verify a real AWS Nitro Enclave attestation from Epsilon
-// Run: npm install @epsilon-data/nitro-verify && node verify-example.js
+// Run: npm install @epsilon-data/nitro-verify && node verify-example.mjs
 
 import { verifyAttestation } from "@epsilon-data/nitro-verify";
 
