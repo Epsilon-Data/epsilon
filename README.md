@@ -12,7 +12,7 @@ Verify a real AWS Nitro attestation without any platform setup:
 
 ```bash
 # JavaScript
-npm install @epsilon-data/nitro-verify && node verify-example.js
+npm install @epsilon-data/nitro-verify && node verify-example.mjs
 
 # Python
 pip install epsilon-attestation-verifier && python verify-example.py
@@ -120,7 +120,7 @@ These packages verify **any** AWS Nitro Enclave attestation document — they wo
 
 ```bash
 # Quick test — verify a real Nitro attestation in 10 seconds:
-node verify-example.js    # JavaScript
+node verify-example.mjs    # JavaScript
 python verify-example.py  # Python
 ```
 

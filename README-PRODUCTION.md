@@ -8,7 +8,7 @@ No setup required — use the live instance with pre-configured test accounts an
 |---------|-----|
 | Data Hub | https://app.epsilon-data.org |
 | Job Scheduler | https://analysis.epsilon-data.org |
-| Trust Hub | https://trust.epsilon-data.org |
+| Trust Center | https://trust.epsilon-data.org |
 
 ### Test Accounts
 
@@ -77,14 +77,16 @@ The data stays on your machine — epsilon-proxy encrypts it locally and sends o
 ### Step 2: Prepare your research repository
 
 1. Fork or use the [epsilon-research-template](https://github.com/Epsilon-Data/epsilon-research-template) as a GitHub template
-2. Configure `build/build.yml` with your Dataset ID and Archetype ID:
-   ```yaml
-   datasets:
-     - dataset_id: "your-dataset-id"
-       archetype_id: "your-archetype-id"
+2. Install the Epsilon SDK and initialize your project:
+   ```bash
+   pip install epsilon-sdk
+   epsilon login                          # Authenticate with Epsilon
+   epsilon init <dataset_id>              # Generates project.yml, main.py, and generated/ directory
    ```
-3. Write your analysis in `build/main.py` using the Epsilon SDK
-4. Push to GitHub
+3. Edit `main.py` with your analysis code (uses generated Python classes from the archetype)
+4. Test locally: `epsilon run` (runs against synthetic data)
+5. Build for deployment: `epsilon build` (creates `build/` directory with `build.yml` and packaged code)
+6. Push to GitHub
 
 ![Step 2: Research Template and SDK](static/Step5.gif)
 
