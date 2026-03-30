@@ -41,7 +41,7 @@ echo "admin=ADMIN::${encryptedPwd}" > ${ATLAS_HOME}/conf/users-credentials.prope
 ${ATLAS_HOME}/scripts/atlas-properties.sh
 cd ${ATLAS_HOME}/bin
 
-# TODO: Patch as part of image build   
+# TODO: Patch as part of image build
 # patch files
 patch --verbose --ignore-whitespace -N --fuzz 2 < ${ATLAS_HOME}/patches/atlas_start.py.patch || true
 patch --verbose --ignore-whitespace -N --fuzz 2 < ${ATLAS_HOME}/patches/atlas_config.py.patch || true
@@ -66,8 +66,8 @@ then
   tail -fF ${ATLAS_HOME}/logs/application.log | sed '/Defaulting to local host name/ q' \
   && sleep 10 \
   && ${ATLAS_HOME}/bin/atlas_stop.py \
-  && truncate -s0 ${ATLAS_HOME}/logs/application.log 
-    
+  && truncate -s0 ${ATLAS_HOME}/logs/application.log
+
   touch ${ATLAS_HOME}/state/.initDone
   echo "Done initialising Atlas!"
   echo "#############################################################################"
