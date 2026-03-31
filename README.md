@@ -25,7 +25,7 @@ Then explore the live platform: https://app.epsilon-data.org (login: `reviewer1@
 | Component | Provided |
 |-----------|----------|
 | Live production instance (real Nitro Enclaves) | [app.epsilon-data.org](https://app.epsilon-data.org) |
-| Local Docker deployment (27 containers) | `make up` |
+| Local Docker deployment (31 containers) | `make up` |
 | npm package (client-side attestation verifier) | [@epsilon-data/nitro-verify](https://www.npmjs.com/package/@epsilon-data/nitro-verify) |
 | PyPI package (Python attestation verifier) | [epsilon-attestation-verifier](https://pypi.org/project/epsilon-attestation-verifier/) |
 | PyPI package (researcher SDK) | [epsilon-sdk](https://pypi.org/project/epsilon-sdk/) |
@@ -46,34 +46,40 @@ Choose one of two evaluation paths:
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        Frontend (:3000)                      │
-│                     React + TypeScript                       │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-              ┌────────────┼────────────┐
-              ▼            ▼            ▼
-     ┌──────────────┐ ┌────────┐ ┌──────────────┐
-     │ API (:3334)  │ │Keycloak│ │Job Scheduler │
-     │ NestJS       │ │(:8080) │ │(:3005)       │
-     └──────┬───────┘ └────────┘ └──────────────┘
-            │
-     ┌──────┴───────┐
-     │  PostgreSQL   │ ◄── Coordinator Workers
-     │  (:5432)      │     (fetcher → clone → executor)
-     └──────┬───────┘
-            │                        ┌──────────────────┐
-            │                        │ Enclave (:5005)  │
-            │                        │ AWS Nitro / Local│
-            └───────────────────────►│ Simulation       │
-                                     └────────┬─────────┘
-                                              │
-                                     ┌────────▼─────────┐
-                                     │ Trust Center     │
-                                     │ (:3001)          │
-                                     │ Verification UI  │
-                                     └──────────────────┘
+  DATA OWNER'S MACHINE                         AWS CLOUD
+ ┌─────────────────────┐        ┌─────────────────────────────────────────────┐
+ │ ┌─────────────────┐ │        │           Frontend (:3000)                  │
+ │ │   PostgreSQL DB  │ │        │           React + TypeScript                │
+ │ └────────┬────────┘ │        └──────────────────┬──────────────────────────┘
+ │          │          │                           │
+ │ ┌────────▼────────┐ │               ┌───────────┼───────────┐
+ │ │  epsilon-proxy   │ │               ▼           ▼           ▼
+ │ │  (Go binary)     │ │        ┌──────────┐ ┌────────┐ ┌────────────┐
+ │ │  • verify attest │ │        │ API      │ │Keycloak│ │Job Sched.  │
+ │ │  • encrypt data  │ │        │ (:3334)  │ │(:8080) │ │(:3005)     │
+ │ └────────┬────────┘ │        └─────┬────┘ └────────┘ └────────────┘
+ │          │          │              │
+ │  ┌───────▼───────┐  │       ┌──────┴───────┐
+ │  │rathole client │──┼──────►│  Coordinator  │◄── AI Agent (outside TCB)
+ │  └───────────────┘  │ tunnel│  (4 workers)  │
+ └─────────────────────┘       └──────┬────────┘
+   credentials never leave             │ vsock
+   this machine                 ┌──────▼──────────┐
+                                │  Nitro Enclave   │
+   plaintext never leaves       │  • decrypt data  │
+   proxy + enclave              │  • execute code  │
+                                │  • attestation   │
+                                └──────┬──────────┘
+                                       │
+                                ┌──────▼──────────┐
+                                │  Trust Center    │
+                                │  (:3001)         │
+                                │  client-side     │
+                                │  verification    │
+                                └─────────────────┘
 ```
+
+> **Key principle:** No platform component sees plaintext data. The proxy encrypts at the data source; only the enclave can decrypt. See [coordinator architecture](https://github.com/Epsilon-Data/coordinator#detailed-architecture) for detailed sequence diagrams.
 
 ## Repository Structure
 
@@ -83,7 +89,7 @@ This is the main orchestration repo. Component source code lives in sibling dire
 |-----------|------|-------------|
 | API | [api](https://github.com/Epsilon-Data/api) | NestJS backend — datasets, archetypes, jobs |
 | Frontend | [frontend](https://github.com/Epsilon-Data/frontend) | React UI — Data Hub, archetype builder |
-| Coordinator | [coordinator](https://github.com/Epsilon-Data/coordinator) | Python workers — job fetcher, clone, executor |
+| Coordinator | [coordinator](https://github.com/Epsilon-Data/coordinator) | Python workers — job fetcher, clone, AI agent, executor ([detailed architecture](https://github.com/Epsilon-Data/coordinator#detailed-architecture)) |
 | Enclave | [epsilon-enclave](https://github.com/Epsilon-Data/epsilon-enclave) | Python TEE runtime — encryption, execution, attestation |
 | Trust Center | [epsilon-trust-center](https://github.com/Epsilon-Data/epsilon-trust-center) | Verification Center — public attestation viewer |
 | Job Scheduler | [job-scheduler](https://github.com/Epsilon-Data/job-scheduler) | Research workspace — job submission UI |
@@ -161,7 +167,7 @@ Data owners install epsilon-proxy next to their database. The proxy:
 1. Verifies the enclave's attestation (COSE_Sign1, certificate chain, PCR0)
 2. Queries the local database (credentials never leave the machine)
 3. Encrypts results with the enclave's attested public key (RSA-2048-OAEP + AES-256-CBC)
-4. Tunnels ciphertext to the enclave via rathole (zero inbound ports required)
+4. Tunnels ciphertext to the coordinator via rathole (zero inbound ports required) — coordinator forwards to enclave via vsock
 
 No platform component sees plaintext data.
 
