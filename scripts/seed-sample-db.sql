@@ -1,48 +1,3 @@
-#!/bin/bash
-# Epsilon Sample Database Setup
-# Creates a simple university database for testing epsilon-proxy
-#
-# Usage:
-#   ./scripts/seed-sample-db.sh
-#   ./scripts/seed-sample-db.sh --host localhost --port 5432 --user postgres --password postgres --db epsilon_sample
-
-set -e
-
-HOST="${1:-localhost}"
-PORT="${2:-5432}"
-USER="${3:-postgres}"
-PASSWORD="${4:-postgres}"
-DB="${5:-epsilon_sample}"
-
-# Parse named arguments
-while [[ $# -gt 0 ]]; do
-  case $1 in
-    --host) HOST="$2"; shift 2;;
-    --port) PORT="$2"; shift 2;;
-    --user) USER="$2"; shift 2;;
-    --password) PASSWORD="$2"; shift 2;;
-    --db) DB="$2"; shift 2;;
-    *) shift;;
-  esac
-done
-
-export PGPASSWORD="$PASSWORD"
-
-echo "═══════════════════════════════════════════════════"
-echo " Epsilon Sample Database Setup"
-echo "═══════════════════════════════════════════════════"
-echo " Host:     $HOST:$PORT"
-echo " User:     $USER"
-echo " Database: $DB"
-echo ""
-
-# Create database if not exists
-echo "Creating database '$DB'..."
-psql -h "$HOST" -p "$PORT" -U "$USER" -tc "SELECT 1 FROM pg_database WHERE datname = '$DB'" | grep -q 1 \
-  || psql -h "$HOST" -p "$PORT" -U "$USER" -c "CREATE DATABASE $DB"
-
-echo "Creating tables..."
-psql -h "$HOST" -p "$PORT" -U "$USER" -d "$DB" <<'SQL'
 
 -- Drop existing tables
 DROP TABLE IF EXISTS student_subject CASCADE;
@@ -97,10 +52,7 @@ CREATE TABLE student_subject (
 CREATE INDEX idx_student_subject_student ON student_subject(student_id);
 CREATE INDEX idx_student_subject_subject ON student_subject(subject_id);
 
-SQL
 
-echo "Inserting sample data..."
-psql -h "$HOST" -p "$PORT" -U "$USER" -d "$DB" <<'SQL'
 
 -- Universities
 INSERT INTO university (name, country, city, founded_year, website) VALUES
@@ -220,24 +172,4 @@ INSERT INTO student_subject (student_id, subject_id, grade, semester) VALUES
 (44, 20, 'A', '2022-S1'), (44, 23, 'B', '2022-S2'),
 (45, 21, 'B', '2023-S1'), (45, 22, 'A', '2023-S2');
 
-SQL
 
-echo ""
-echo "═══════════════════════════════════════════════════"
-echo " Done! Sample database ready."
-echo "═══════════════════════════════════════════════════"
-echo ""
-echo " Database: $DB"
-echo " Tables:   university (5 rows)"
-echo "           student (50 rows)"
-echo "           subject (23 rows)"
-echo "           student_subject (58 enrollments)"
-echo ""
-echo " Connection URL:"
-echo "   postgres://$USER:$PASSWORD@$HOST:$PORT/$DB"
-echo ""
-echo " Next steps:"
-echo "   1. epsilon-proxy register --token <YOUR_TOKEN>"
-echo "      (use the connection URL above when prompted)"
-echo "   2. epsilon-proxy start"
-echo ""

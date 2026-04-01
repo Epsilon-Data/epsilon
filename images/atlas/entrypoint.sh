@@ -24,7 +24,7 @@ export MANAGE_LOCAL_SOLR=false
 export MANAGE_EMBEDDED_CASSANDRA=false
 export MANAGE_LOCAL_ELASTICSEARCH=false
 
-export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-arm64
+export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-$(dpkg --print-architecture)
 
 export ATLAS_HOME=/opt/atlas
 

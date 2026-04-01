@@ -120,7 +120,7 @@ services:
     networks:
       - epsilon_app
       - pg_platform
-    entrypoint: ["sh", "-c", "pnpm prisma db push --accept-data-loss 2>/dev/null || pnpm prisma migrate deploy"]
+    entrypoint: ["sh", "-c", "sleep 5 && pnpm prisma db push --accept-data-loss 2>/dev/null || pnpm prisma migrate deploy"]
     command: []
 
   api:
@@ -209,6 +209,8 @@ services:
     restart: unless-stopped
     volumes:
       - pg_scheduler_data:/var/lib/postgresql/data
+    ports:
+      - "6544:5432"
     environment:
       POSTGRES_DB: ${SCHEDULER_POSTGRES_DB:-scheduler}
       POSTGRES_USER: ${SCHEDULER_POSTGRES_USER:-scheduler}

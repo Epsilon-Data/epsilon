@@ -9,7 +9,7 @@ Run the entire Epsilon Trusted Research Environment on your machine using Docker
 │                          EPSILON PLATFORM                              │
 │                                                                        │
 │  ┌──────────┐  ┌──────────┐  ┌─────────────┐  ┌──────────────────┐    │
-│  │ Frontend │  │   API    │  │Job Scheduler│  │  Trust Center    │    │
+│  │ Frontend │  │   API    │  │Job Scheduler│  │  Trust Hub    │    │
 │  │ :3000    │  │ :3334    │  │   :3005     │  │     :3001        │    │
 │  └────┬─────┘  └────┬─────┘  └──────┬──────┘  └────────┬─────────┘    │
 │       │              │               │                  │              │
@@ -36,9 +36,9 @@ Run the entire Epsilon Trusted Research Environment on your machine using Docker
 5. **Coordinator** pipeline processes the job:
    - **Fetcher** picks up queued jobs from the scheduler database
    - **Clone** clones the researcher's GitHub repository
-   - **AI Agent** (optional) analyzes the code for PII leaks and policy violations using CrewAI
+   - **AI Agent** (optional) analyzes the code for PII leaks and policy violations using CrewAI — requires `OPENAI_API_KEY` in `.env` (jobs skip AI analysis if unset)
    - **Executor** fetches encrypted data via **Middleware** → runs the analysis in a simulated enclave → generates a cryptographic attestation document
-6. **Trust Center** displays the attestation for independent client-side verification
+6. **Trust Hub** displays the attestation for independent client-side verification
 
 ### Key Design Principle
 
@@ -68,7 +68,7 @@ make up       # start everything
 `make up` runs three phases automatically:
 1. **Infrastructure** — PostgreSQL, Keycloak, Vault, Redis, Atlas, Kafka, Elasticsearch, Cassandra
 2. **Migrations** — API and scheduler database schemas
-3. **Applications** — API, Frontend, Job Scheduler, Coordinator workers, Trust Center
+3. **Applications** — API, Frontend, Job Scheduler, Coordinator workers, Trust Hub
 
 Wait for it to print **"Epsilon is running!"** before opening the browser.
 
@@ -90,7 +90,7 @@ Researchers submit jobs from GitHub repositories. You need a GitHub OAuth app:
 |---------|-----|-------------|
 | Frontend (Data Hub) | http://localhost:3000 | Dataset management, archetype builder |
 | Job Scheduler | http://localhost:3005 | Research workspace, job submission |
-| Trust Center | http://localhost:3001 | Attestation verification |
+| Trust Hub | http://localhost:3001 | Attestation verification |
 | API | http://localhost:3334 | NestJS backend |
 | Keycloak | http://localhost:8080 | Identity provider (admin: `admin@epsilon-data.org` / `secret`) |
 | Vault | http://localhost:8200 | Secrets management |
@@ -100,27 +100,67 @@ Researchers submit jobs from GitHub repositories. You need a GitHub OAuth app:
 
 ### 1. Create a Dataset (Data Owner)
 
+#### Setting up a test database (if you don't have one)
+
+If you don't have a PostgreSQL database to test with, use the included seed script:
+
+```bash
+# 1. Create and seed the sample database (requires local PostgreSQL)
+createdb epsilon_sample
+psql -d epsilon_sample < scripts/seed-sample-db.sql
+
+# 2. Verify
+psql -d epsilon_sample -c "\
+  SELECT 'university' AS table, count(*) FROM university UNION ALL \
+  SELECT 'student', count(*) FROM student UNION ALL \
+  SELECT 'subject', count(*) FROM subject UNION ALL \
+  SELECT 'student_subject', count(*) FROM student_subject;"
+```
+
+This creates an `epsilon_sample` database with 4 tables (5 universities, 50 students, 23 subjects, 64 enrollments) on your local PostgreSQL.
+
+Alternatively, use any existing PostgreSQL database accessible from Docker (e.g. local PostgreSQL, cloud-hosted, etc.).
+
+#### Creating the dataset
+
 1. Open http://localhost:3000
 2. Log in as **Data Owner**: `owner@epsilon-data.org` / `secret`
-3. Create a new project:
-   - Enter database credentials:
-     - **Hostname**: `host.docker.internal`
-     - **Port**: `5432`
-     - **Username/Password**: your local PostgreSQL credentials
-     - **Database**: your database name
-   - Wait for the data broker to crawl the schema (~10s)
-4. Map columns to an **Archetype** (semantic data structure defining which columns researchers can access)
-5. Publish the dataset
+3. Create a new project
+4. When asked **"How should the platform access your data?"**, choose **Cloud Connect** (not Epsilon Proxy — proxy is for production BYOD setups, not local dev)
+5. Enter database credentials using either option:
+
+   **Option A — Database URL:**
+   ```
+   postgresql://your_user:your_password@host.docker.internal:5432/epsilon_sample
+   ```
+
+   **Option B — Manual entry:**
+
+| Field | Value |
+|-------|-------|
+| Hostname | `host.docker.internal` |
+| Port | `5432` |
+| Username | your local PostgreSQL username |
+| Password | your local PostgreSQL password |
+| Database | `epsilon_sample` |
+| SSL | Off (local) |
+
+> **Note**: Use `host.docker.internal` to reach databases running on your host machine from inside Docker containers.
+
+6. Wait for the data broker to crawl the schema (~30s). You can check progress with `docker logs data-broker-* -f`
+7. Click **Create Archetype** — select which tables and columns to expose in the tree view
+8. Click **Publish** — the dataset is now visible to researchers in Browse Hub
 
 ### 2. Request Access to a Dataset (Researcher)
 
 1. Open http://localhost:3000
 2. Log in as **Researcher**: `researcher@epsilon-data.org` / `secret`
-3. Browse published datasets on the **Shared** tab
+3. Go to **Browse Hub** → **Browse Projects** to see published datasets
 4. Click on a dataset and send a **Connection Request**
    - **Public datasets** are auto-approved
    - **Private datasets** require the Data Owner to approve the request
-5. The researcher now has access to the dataset ID and archetype ID
+5. Check your request status at **Browse Hub → Track Requests**
+6. Once approved, the researcher has access to the dataset ID and archetype ID
 
 ### 3. Prepare a Research Repository
 
@@ -130,6 +170,7 @@ Researchers submit jobs from GitHub repositories. You need a GitHub OAuth app:
    pip install epsilon-sdk
    epsilon change-server http://localhost:3334    # Point to local instance
    epsilon login                                   # Authenticate (researcher@epsilon-data.org / secret)
+   epsilon datasets                                # Lists all datasets you have access to, with IDs
    epsilon init <dataset_id>                       # Generates project.yml, main.py, generated/
    ```
 3. Edit `main.py` with your analysis code
@@ -146,33 +187,22 @@ Researchers submit jobs from GitHub repositories. You need a GitHub OAuth app:
 5. Submit a job — the coordinator pipeline processes it:
 
 ```
-  ┌─────────┐    ┌─────────┐    ┌──────────┐    ┌───────────┐    ┌─────────┐
-  │ Fetcher │───▶│  Clone  │───▶│ AI Agent │───▶│ Executor  │───▶│ Success │
-  │ queued  │    │ cloned  │    │(optional)│    │ executed  │    │         │
-  └─────────┘    └─────────┘    └──────────┘    └───────────┘    └─────────┘
-                                                     │
-                                              ┌──────┴──────┐
-                                              │ Fetch data  │
-                                              │ Encrypt     │
-                                              │ Execute     │
-                                              │ Attest      │
-                                              └─────────────┘
+  ┌─────────┐    ┌─────────┐    ┌───────────┐    ┌─────────┐
+  │ Fetcher │───▶│  Clone  │───▶│ Executor  │───▶│ Success │
+  │ queued  │    │ cloned  │    │ executing │    │         │
+  └─────────┘    └────┬────┘    └─────┬─────┘    └─────────┘
+                      │               │
+                      ▼               ▼
+                ┌──────────┐   ┌─────────────┐
+                │ AI Agent │   │ Fetch data  │
+                │(parallel,│   │ Encrypt     │
+                │ optional)│   │ Execute     │
+                └──────────┘   │ Attest      │
+                               └─────────────┘
 ```
 
 6. View the job detail page — shows execution output, attestation document, PCR values, script/dataset/output hashes, execution metrics, and server verification results
 
-### 5. Verify Attestation (Trust Center)
-
-1. Open http://localhost:3001
-2. Find the completed job in the public job ledger
-3. Click to verify — the Trust Center performs **client-side verification** in your browser:
-   - **COSE_Sign1 Signature** — cryptographic signature verified
-   - **Certificate Chain** — local CA chain validated (dev mode)
-   - **PCR Values** — enclave measurements displayed
-   - **Execution Proof** — job ID, script hash, dataset hash, output hash bound in attestation
-   - **Output Integrity** — SHA-256 hash of execution output matches attested value
-
-> In local mode, attestation documents are signed by a local ECDSA P-384 CA (not AWS Nitro hardware). The Trust Center runs in `DEV_MODE` and accepts the local root CA. All cryptographic verification steps are identical to production — only the root of trust differs.
 
 ## Test Accounts
 
@@ -189,7 +219,7 @@ The platform runs in **simulation mode** by default:
 
 - `USE_LOCAL_ENCLAVE=true` — enclave logic runs as a regular Python process (no AWS Nitro hardware needed)
 - Attestation documents are **structurally identical** COSE_Sign1 documents signed by a local ECDSA P-384 CA
-- The Trust Center's client-side verifier (`@epsilon-data/nitro-verify`) accepts the local root CA via `DEV_MODE=true`
+- The Trust Hub's client-side verifier (`@epsilon-data/nitro-verify`) accepts the local root CA via `DEV_MODE=true`
 - PCR values are placeholders — real hardware measurements only exist in production with AWS Nitro Enclaves
 - All other functionality (archetype builder, job pipeline, data ingestion, verification) works identically to production
 
@@ -204,19 +234,31 @@ All application services use pre-built images from GitHub Container Registry:
 | Job Scheduler | `ghcr.io/epsilon-data/job-scheduler` | [Epsilon-Data/job-scheduler](https://github.com/Epsilon-Data/job-scheduler) |
 | Middleware | `ghcr.io/epsilon-data/epsilon-middleware` | [Epsilon-Data/epsilon-middleware](https://github.com/Epsilon-Data/epsilon-middleware) |
 | Coordinator | `ghcr.io/epsilon-data/coordinator` | [Epsilon-Data/coordinator](https://github.com/Epsilon-Data/coordinator) |
-| Trust Center | `ghcr.io/epsilon-data/epsilon-trust-center` | [Epsilon-Data/epsilon-trust-center](https://github.com/Epsilon-Data/epsilon-trust-center) |
+| Trust Hub | `ghcr.io/epsilon-data/epsilon-trust-center` | [Epsilon-Data/epsilon-trust-center](https://github.com/Epsilon-Data/epsilon-trust-center) |
 | Token Handler | `ghcr.io/epsilon-data/ts-services` | [Epsilon-Data/ts-packages](https://github.com/Epsilon-Data/ts-packages) |
 
 ## Commands
 
 ```bash
+# Lifecycle
 make up       # start everything (phased)
 make down     # stop everything (keeps data)
 make restart  # stop + start
+make clean    # stop and delete all data
+
+# Monitoring
 make check    # verify all services
 make status   # show container status
 make logs     # follow all logs
-make clean    # stop and delete all data
+
+# Individual restarts
+make restart-api           # restart API only
+make restart-frontend      # restart frontend only
+make restart-atlas         # restart Atlas metadata server
+make restart-coordinator   # restart all coordinator workers
+make restart-scheduler     # restart job scheduler
+make restart-trust-center  # restart trust center
+make fix-networks          # fix Docker network issues (restarts key services)
 ```
 
 ## Troubleshooting
@@ -247,6 +289,16 @@ On the very first run, Keycloak and Cassandra need extra time to initialize. If 
 ### Atlas takes too long
 
 Normal on first boot — Atlas initializes JanusGraph + Cassandra + Elasticsearch backends. Check http://localhost:21000 for status. Takes several minutes on first run, under 30 seconds on subsequent runs.
+
+### "Metadata service unavailable" or Atlas errors
+
+Docker Desktop for Mac has a known bug where containers silently lose their network attachments, especially with many containers and networks (Epsilon runs 30+ containers across 18 networks). When this happens, the API can't reach Atlas and you'll see `getaddrinfo ENOTFOUND atlas-server`.
+
+```bash
+make fix-networks
+```
+
+This reconnects dropped networks and restarts the API. You may need to run it after `make up` if you see metadata errors. This issue does not occur on Linux.
 
 ### Other issues
 

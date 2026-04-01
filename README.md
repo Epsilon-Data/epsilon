@@ -72,7 +72,7 @@ Choose one of two evaluation paths:
                                 └──────┬──────────┘
                                        │
                                 ┌──────▼──────────┐
-                                │  Trust Center    │
+                                │  Trust Hub    │
                                 │  (:3001)         │
                                 │  client-side     │
                                 │  verification    │
@@ -91,7 +91,7 @@ This is the main orchestration repo. Component source code lives in sibling dire
 | Frontend | [frontend](https://github.com/Epsilon-Data/frontend) | React UI — Data Hub, archetype builder |
 | Coordinator | [coordinator](https://github.com/Epsilon-Data/coordinator) | Python workers — job fetcher, clone, AI agent, executor ([detailed architecture](https://github.com/Epsilon-Data/coordinator#detailed-architecture)) |
 | Enclave | [epsilon-enclave](https://github.com/Epsilon-Data/epsilon-enclave) | Python TEE runtime — encryption, execution, attestation |
-| Trust Center | [epsilon-trust-center](https://github.com/Epsilon-Data/epsilon-trust-center) | Verification Center — public attestation viewer |
+| Trust Hub | [epsilon-trust-center](https://github.com/Epsilon-Data/epsilon-trust-center) | Verification Center — public attestation viewer |
 | Job Scheduler | [job-scheduler](https://github.com/Epsilon-Data/job-scheduler) | Research workspace — job submission UI |
 | SDK | [epsilon-sdk](https://github.com/Epsilon-Data/epsilon-sdk) | Python CLI — `epsilon init/run/build` |
 | Proxy | [epsilon-proxy](https://github.com/Epsilon-Data/epsilon-proxy) | Go binary — source-side encryption for BYOD |

@@ -1,4 +1,6 @@
-.PHONY: up down logs status clean setup help check infra apps pull
+.PHONY: up down logs status clean setup help check infra apps pull \
+	restart-api restart-frontend restart-atlas restart-coordinator restart-scheduler restart-trust-center \
+	fix-networks
 
 COMPOSE := docker compose --profile metadata --profile frontend
 
@@ -95,8 +97,11 @@ up: ## Start all services (infra first, then apps)
 	@echo "══════════════════════════════════════════════════════"
 	$(COMPOSE) up -d $(APP_SERVICES)
 	@echo ""
+	@echo "  Reconnecting networks (Docker Desktop workaround)..."
+	@sleep 5
+	@docker restart epsilon-api > /dev/null 2>&1 || true
 	@echo "  Waiting for services to be ready..."
-	@sleep 10
+	@sleep 5
 	@until curl -sf http://localhost:3000 > /dev/null 2>&1; do sleep 3; done
 	@echo "  frontend:      ready"
 	@until curl -sf http://localhost:3001/api/stats > /dev/null 2>&1; do sleep 3; done
@@ -160,7 +165,42 @@ apps: ## Start application services only (assumes infra is healthy)
 	@until docker inspect epsilon-api-migrate --format '{{.State.Status}}' 2>/dev/null | grep -q exited; do sleep 3; done
 	@until docker inspect epsilon-scheduler-migrate --format '{{.State.Status}}' 2>/dev/null | grep -q exited; do sleep 3; done
 	$(COMPOSE) up -d $(APP_SERVICES)
+	@echo "  Reconnecting networks (Docker Desktop workaround)..."
+	@sleep 5
+	@docker restart epsilon-api > /dev/null 2>&1 || true
 	@echo "Application services started."
+
+seed-sample-db: ## Create a sample test database for local development
+	@echo "Creating sample database on platform PostgreSQL..."
+	@docker exec pg_platform psql -U $${PLATFORM_POSTGRES_USER:-epsilon_admin} -d $${PLATFORM_POSTGRES_DB:-epsilon} -c "CREATE DATABASE patientdb" 2>/dev/null || true
+	@bash scripts/seed-sample-db.sh --host localhost --port 6543 --user $${PLATFORM_POSTGRES_USER:-epsilon_admin} --password $${PLATFORM_POSTGRES_PASSWORD:-supersecret} --db patientdb
+	@echo "Done. Use host.docker.internal:6543/patientdb when creating a dataset."
+
+fix-networks: ## Fix Docker network issues (reconnect dropped networks + restart)
+	@echo "Reconnecting networks..."
+	@docker network connect epsilon_metadata_internal atlas-server 2>/dev/null || true
+	@docker network connect epsilon_app epsilon-api 2>/dev/null || true
+	@docker network connect epsilon_metadata_internal epsilon-api 2>/dev/null || true
+	@docker restart epsilon-api 2>/dev/null || true
+	@echo "Done. Run 'make check' to verify."
+
+restart-api: ## Restart API only
+	@docker restart epsilon-api && echo "API restarted"
+
+restart-frontend: ## Restart frontend only
+	@docker restart epsilon-frontend && echo "Frontend restarted"
+
+restart-atlas: ## Restart Atlas metadata server
+	@docker restart atlas-server && echo "Atlas restarted (may take a few minutes to be healthy)"
+
+restart-coordinator: ## Restart all coordinator workers
+	@docker restart epsilon-fetcher epsilon-clone epsilon-executor epsilon-ai-agent 2>/dev/null; echo "Coordinator workers restarted"
+
+restart-scheduler: ## Restart job scheduler
+	@docker restart epsilon-job-scheduler && echo "Job scheduler restarted"
+
+restart-trust-center: ## Restart trust center
+	@docker restart epsilon-trust-center && echo "Trust center restarted"
 
 check: ## Verify all services are running and healthy
 	@echo ""
