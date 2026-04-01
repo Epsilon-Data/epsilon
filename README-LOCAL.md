@@ -44,6 +44,12 @@ Run the entire Epsilon Trusted Research Environment on your machine using Docker
 
 Data **never leaves the data owner's database** in raw form. The Middleware fetches it, encrypts it, and sends it to the enclave (or local simulator). The platform operator never sees raw data. Output is bound to an attestation document with SHA-256 hashes of the script, dataset, and result.
 
+## Important Notes
+
+> **Rathole is NOT required for local deployment.** Rathole is only used with "Epsilon Proxy" mode (source-side encryption for BYOD). The local deployment uses "Cloud Connect" mode, where the platform connects to your database directly via the middleware service. No tunnel or rathole configuration needed. If you see rathole in a restarting state, it can be safely ignored.
+
+> **epsilon-proxy is NOT required for local deployment.** In local mode, select "Cloud Connect" when creating a project. The platform connects to your database directly. epsilon-proxy is only needed for production BYOD with source-side encryption.
+
 ## Prerequisites
 
 - **Docker & Docker Compose v2** (Docker Desktop 4.x recommended)
