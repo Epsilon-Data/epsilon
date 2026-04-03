@@ -133,7 +133,7 @@ Alternatively, use any existing PostgreSQL database accessible from Docker (e.g.
 
    **Option A — Database URL:**
    ```
-   postgresql://epsilon_admin:supersecret@pg_platform:5432/epsilon_sample
+   postgresql://epsilon_admin:supersecret@pg_platform:5432/epsilon_sample?sslmode=disable
    ```
 
    **Option B — Manual entry:**
@@ -275,7 +275,7 @@ make fix-networks          # Fix Docker network issues (restarts key services)
 
 ### Port already in use
 
-If `make up` fails with `Ports are not available: ... address already in use`:
+If `make infra` fails with `Ports are not available: ... address already in use`:
 
 ```bash
 # 1. Stop all containers
@@ -287,14 +287,16 @@ docker rm -f $(docker ps -aq) 2>/dev/null
 # 3. If ports are STILL held (common on Mac after failed starts):
 #    Quit Docker Desktop completely (not just close window),
 #    wait 5 seconds, reopen it, then:
-make up
+make infra
+make migrate
+make apps
 ```
 
 To check which ports are stuck: `lsof -i :<port> | grep LISTEN`
 
-### `make up` fails at health check (first run)
+### `make infra` fails at health check (first run)
 
-On the very first run, Keycloak and Cassandra need extra time to initialize. If `make up` fails with `dependency failed to start: container X is unhealthy`, just run `make up` again — Docker will resume from where it left off (volumes persist).
+On the very first run, Keycloak and Cassandra need extra time to initialize. If `make infra` fails with `dependency failed to start: container X is unhealthy`, just run `make infra` again — Docker will resume from where it left off (volumes persist).
 
 ### Atlas takes too long
 
