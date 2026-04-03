@@ -313,6 +313,38 @@ restart-scheduler: ## Restart job scheduler
 restart-trust-center: ## Restart trust center
 	@docker restart epsilon-trust-center && echo "Trust center restarted"
 
+seed-sample-db: ## Create a sample test database for local development
+	@echo "Creating sample database on platform PostgreSQL..."
+	@docker exec pg_platform psql -U $${PLATFORM_POSTGRES_USER:-epsilon_admin} -d $${PLATFORM_POSTGRES_DB:-epsilon} -c "CREATE DATABASE patientdb" 2>/dev/null || true
+	@bash scripts/seed-sample-db.sh --host localhost --port 6543 --user $${PLATFORM_POSTGRES_USER:-epsilon_admin} --password $${PLATFORM_POSTGRES_PASSWORD:-supersecret} --db patientdb
+	@echo "Done. Use host.docker.internal:6543/patientdb when creating a dataset."
+
+fix-networks: ## Fix Docker network issues (reconnect dropped networks + restart)
+	@echo "Reconnecting networks..."
+	@docker network connect epsilon_metadata_internal atlas-server 2>/dev/null || true
+	@docker network connect epsilon_app epsilon-api 2>/dev/null || true
+	@docker network connect epsilon_metadata_internal epsilon-api 2>/dev/null || true
+	@docker restart epsilon-api 2>/dev/null || true
+	@echo "Done. Run 'make check' to verify."
+
+restart-api: ## Restart API only
+	@docker restart epsilon-api && echo "API restarted"
+
+restart-frontend: ## Restart frontend only
+	@docker restart epsilon-frontend && echo "Frontend restarted"
+
+restart-atlas: ## Restart Atlas metadata server
+	@docker restart atlas-server && echo "Atlas restarted (may take a few minutes to be healthy)"
+
+restart-coordinator: ## Restart all coordinator workers
+	@docker restart epsilon-fetcher epsilon-clone epsilon-executor epsilon-ai-agent 2>/dev/null; echo "Coordinator workers restarted"
+
+restart-scheduler: ## Restart job scheduler
+	@docker restart epsilon-job-scheduler && echo "Job scheduler restarted"
+
+restart-trust-center: ## Restart trust center
+	@docker restart epsilon-trust-center && echo "Trust center restarted"
+
 check: ## Verify all services are running and healthy
 	@echo ""
 	@echo "Service Status:"
