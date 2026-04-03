@@ -21,6 +21,9 @@ volumes:
 
 # list of networks
 networks:
+  epsilon:
+    name: "epsilon"
+  # Legacy network definitions (kept for compatibility, not used by services)
   pg_platform:
     driver: bridge
   pg_test:
@@ -72,8 +75,7 @@ services:
       POSTGRES_USER: ${PLATFORM_POSTGRES_USER:-epsilon_admin}
       POSTGRES_PASSWORD: ${PLATFORM_POSTGRES_PASSWORD:-supersecret}
     networks:
-      - pg_platform
-      - pg_internal
+      - epsilon
     logging:
       driver: "json-file"
       options:
@@ -103,7 +105,7 @@ services:
       POSTGRES_USER: ${AUTH_POSTGRES_USER:-auth_admin}
       POSTGRES_PASSWORD: ${AUTH_POSTGRES_PASSWORD:-supersecret}
     networks:
-      - pg_auth
+      - epsilon
     healthcheck:
       test: ["CMD-SHELL", "pg_isready", "-d", "keycloak"]
       interval: 10s
@@ -117,7 +119,7 @@ services:
     ports:
       - "6379:6379" # Expose Redis on default port
     networks:
-      - redis_host
+      - epsilon
     volumes:
       - redis_data:/data
     restart: unless-stopped
@@ -144,8 +146,7 @@ services:
       POSTGRES_USER: ${TEST_POSTGRES_USER:-test_admin}
       POSTGRES_PASSWORD: ${TEST_POSTGRES_PASSWORD:-supersecret}
     networks:
-      - pg_test
-      - pg_internal
+      - epsilon
       # - pg_external
     logging:
       driver: "json-file"
@@ -163,7 +164,7 @@ services:
   # metadata services
   atlas-server:
     container_name: atlas-server
-    image: aarepuu/atlas
+    image: nizzle94/atlas
     profiles: [metadata]
     restart: unless-stopped
     volumes:
@@ -194,9 +195,7 @@ services:
       CASSANDRA_EPSILON_PASSWORD: ${CASSANDRA_EPSILON_PASSWORD:-secret}
       SEED_ATLAS: ${SEED_ATLAS:-false}
     networks:
-      - atlas_host # TODO: assess if needed
-      - metadata_internal
-      - pg_test
+      - epsilon
     logging:
       driver: "json-file"
       options:
@@ -233,8 +232,7 @@ services:
     ports:
       - "2181:2181"
     networks:
-      - zookeeper_host
-      - metadata_internal
+      - epsilon
     healthcheck:
       test: ["CMD", "zkServer.sh", "status"]
       interval: 10s
@@ -263,8 +261,7 @@ services:
       KAFKA_ADVERTISED_PORT: 9092
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
     networks:
-      - kafka_host
-      - metadata_internal
+      - epsilon
     depends_on:
       zookeeper:
         condition: service_healthy
@@ -304,8 +301,7 @@ services:
       MAX_HEAP_SIZE: ${CASSANDRA_MAX_HEAP_SIZE:-256M}
       HEAP_NEWSIZE: ${CASSANDRA_HEAP_NEWSIZE:-128M}
     networks:
-      - cassandra_host
-      - metadata_internal
+      - epsilon
     healthcheck:
       test: ["CMD-SHELL", "nodetool status | grep -q '^UN'"]
       interval: 15s
@@ -328,7 +324,7 @@ services:
     volumes:
       - "./images/cassandra/init.sh:/scripts/init.sh:ro"
     networks:
-      - cassandra_host
+      - epsilon
     environment:
       CASSANDRA_HOST: cassandra
       CASSANDRA_PORT: 9042
@@ -367,8 +363,7 @@ services:
       - "9200:9200"
       - "9300:9300"
     networks:
-      - elasticsearch_host
-      - metadata_internal
+      - epsilon
     logging:
       driver: "json-file"
       options:
@@ -424,8 +419,7 @@ services:
       - 8080:8080
       - 9000:9000
     networks:
-      - pg_auth
-      - auth_internal
+      - epsilon
     healthcheck:
       test:
         [
@@ -524,7 +518,7 @@ services:
       # Misc configurations
       KEYCLOAK_ACCESS_TOKEN_LIFESPAN: ${KEYCLOAK_ACCESS_TOKEN_LIFESPAN:-1200}
     networks:
-      - auth_internal
+      - epsilon
     volumes:
       - ./images/keycloak-config-cli:/config:ro
 
@@ -550,8 +544,7 @@ services:
     ports:
       - 8200:8200
     networks:
-      - vault_host
-      - auth_internal
+      - epsilon
     healthcheck:
       test:
         [
@@ -597,26 +590,8 @@ services:
       keycloak:
         condition: service_healthy
     networks:
-      - vault_host
-      - auth_internal
+      - epsilon
     entrypoint: sh -c "/vault-init.sh"
-
-  # tunnel relay for epsilon-proxy connections (local dev)
-  rathole:
-    container_name: rathole
-    build: ./images/rathole
-    restart: unless-stopped
-    ports:
-      - "7100:7000"
-      - "10000-10100:10000-10100"
-    volumes:
-      - ./rathole-config:/config
-    command: ["/config/server.toml"]
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "1024k"
-        max-file: "10"
 
   # dev services
   nginx:
@@ -642,9 +617,7 @@ services:
       - "./images/nginx/nginx.conf:/etc/nginx/nginx.conf:ro"
       - "./images/nginx/index.html:/etc/nginx/html/index.html:ro"
     networks:
-      - auth_internal
-      - api_internal
-      - metadata_internal
+      - epsilon
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
@@ -690,8 +663,7 @@ services:
     ports:
       - "8081:8081"
     networks:
-      - api_internal
-      - auth_internal
+      - epsilon
     command: pnpm service:token-handler
     healthcheck:
       test: "wget --no-verbose --tries=1 --spider http://localhost:${EPSILON_AUTH_TOKEN_HANDLER_PORT:-8081}${EPSILON_AUTH_API_PREFIX:-/api/v1/token} || exit 1"
@@ -718,5 +690,4 @@ services:
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-secret}
       PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
     networks:
-      - pg_auth
-      - pg_internal
+      - epsilon

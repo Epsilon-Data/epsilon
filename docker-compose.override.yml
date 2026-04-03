@@ -8,101 +8,53 @@ volumes:
   coordinator_shared:
 
 networks:
-  scheduler_internal:
-    name: "epsilon_scheduler_internal"
-  epsilon_app:
-    name: "epsilon_app"
+  epsilon:
+    name: "epsilon"
 
 services:
 
-  # Add epsilon_app network to ALL infra services for reliable cross-service DNS
-  # IMPORTANT: must include ALL original networks — override REPLACES, not merges
-  pg_platform:
-    networks:
-      - epsilon_app
-      - pg_platform
-      - pg_internal
-  pg_auth:
-    networks:
-      - epsilon_app
-      - pg_auth
-  pg_test:
-    networks:
-      - epsilon_app
-      - pg_test
-      - pg_internal
-  pg_admin:
-    networks:
-      - epsilon_app
-      - pg_auth
-      - pg_internal
-  redis:
-    networks:
-      - epsilon_app
-      - redis_host
-  keycloak:
-    networks:
-      - epsilon_app
-      - auth_internal
-      - pg_auth
-  keycloak-config-cli:
-    networks:
-      - epsilon_app
-      - auth_internal
-  vault:
-    networks:
-      - epsilon_app
-      - vault_host
-      - auth_internal
-  vault-init:
-    networks:
-      - epsilon_app
-      - vault_host
-      - auth_internal
+  # All services on a single network for reliable DNS resolution
+  # atlas-server and pg_test need pg_test network too (API hardcodes epsilon_pg_test for data-broker containers)
   atlas-server:
     networks:
-      - epsilon_app
-      - atlas_host
-      - metadata_internal
+      - epsilon
       - pg_test
+  pg_test:
+    networks:
+      - epsilon
+      - pg_test
+  pg_platform:
+    networks:
+      - epsilon
+      - pg_test
+  pg_auth:
+    networks: [epsilon]
+  pg_admin:
+    networks: [epsilon]
+  redis:
+    networks: [epsilon]
+  keycloak:
+    networks: [epsilon]
+  keycloak-config-cli:
+    networks: [epsilon]
+  vault:
+    networks: [epsilon]
+  vault-init:
+    networks: [epsilon]
   token-handler-api:
-    networks:
-      - epsilon_app
-      - frontend
-      - auth_internal
+    networks: [epsilon]
   nginx:
-    networks:
-      - epsilon_app
-      - api_internal
-      - auth_internal
-      - metadata_internal
+    networks: [epsilon]
   elasticsearch:
-    networks:
-      - epsilon_app
-      - elasticsearch_host
-      - metadata_internal
+    networks: [epsilon]
   cassandra:
-    networks:
-      - epsilon_app
-      - cassandra_host
-      - metadata_internal
+    networks: [epsilon]
   cassandra-init:
-    networks:
-      - epsilon_app
-      - cassandra_host
+    networks: [epsilon]
   zookeeper:
-    networks:
-      - epsilon_app
-      - zookeeper_host
-      - metadata_internal
+    networks: [epsilon]
   kafka:
-    networks:
-      - epsilon_app
-      - kafka_host
-      - metadata_internal
-  rathole:
-    networks:
-      - epsilon_app
+    networks: [epsilon]
 
   # ===========================================================================
   # API
@@ -117,9 +69,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://${PLATFORM_POSTGRES_USER:-epsilon_admin}:${PLATFORM_POSTGRES_PASSWORD:-supersecret}@pg_platform:5432/${PLATFORM_POSTGRES_DB:-epsilon}
-    networks:
-      - epsilon_app
-      - pg_platform
+    networks: [epsilon]
     entrypoint: ["sh", "-c", "sleep 5 && pnpm prisma db push --accept-data-loss 2>/dev/null || pnpm prisma migrate deploy"]
     command: []
 
@@ -163,14 +113,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "${API_PORT:-3334}:3334"
-    networks:
-      - epsilon_app
-      - pg_platform
-      - auth_internal
-      - api_internal
-      - vault_host
-      - redis_host
-      - metadata_internal
+    networks: [epsilon]
     command: ["node", "dist/main"]
 
   # ===========================================================================
@@ -193,11 +136,7 @@ services:
       - ./images/frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
       - "${FRONTEND_PORT:-3000}:80"
-    networks:
-      - epsilon_app
-      - frontend
-      - api_internal
-      - auth_internal
+    networks: [epsilon]
 
   # ===========================================================================
   # JOB SCHEDULER (Research Workspace)
@@ -215,9 +154,7 @@ services:
       POSTGRES_DB: ${SCHEDULER_POSTGRES_DB:-scheduler}
       POSTGRES_USER: ${SCHEDULER_POSTGRES_USER:-scheduler}
       POSTGRES_PASSWORD: ${SCHEDULER_POSTGRES_PASSWORD:-scheduler}
-    networks:
-      - epsilon_app
-      - scheduler_internal
+    networks: [epsilon]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${SCHEDULER_POSTGRES_USER:-scheduler}"]
       interval: 5s
@@ -233,9 +170,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://${SCHEDULER_POSTGRES_USER:-scheduler}:${SCHEDULER_POSTGRES_PASSWORD:-scheduler}@pg_scheduler:5432/${SCHEDULER_POSTGRES_DB:-scheduler}
-    networks:
-      - epsilon_app
-      - scheduler_internal
+    networks: [epsilon]
     entrypoint: ["sh", "-c", "npx drizzle-kit push --force"]
     command: []
 
@@ -270,10 +205,7 @@ services:
       ZKP_ENABLED: "false"
     ports:
       - "${JOB_SCHEDULER_PORT:-3005}:3005"
-    networks:
-      - epsilon_app
-      - scheduler_internal
-      - auth_internal
+    networks: [epsilon]
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3005/api/health"]
       interval: 30s
@@ -307,11 +239,7 @@ services:
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:-epsilon}
     ports:
       - "8001:8001"
-    networks:
-      - epsilon_app
-      - pg_platform
-      - api_internal
-      - vault_host
+    networks: [epsilon]
 
   # ===========================================================================
   # COORDINATOR (Job Processing Workers)
@@ -330,9 +258,7 @@ services:
       DATABASE_URL: postgresql://${SCHEDULER_POSTGRES_USER:-scheduler}:${SCHEDULER_POSTGRES_PASSWORD:-scheduler}@pg_scheduler:5432/${SCHEDULER_POSTGRES_DB:-scheduler}
       POLLING_INTERVAL: ${POLLING_INTERVAL:-5}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-    networks:
-      - epsilon_app
-      - scheduler_internal
+    networks: [epsilon]
 
   coordinator-clone:
     image: ${COORDINATOR_IMAGE:-ghcr.io/epsilon-data/coordinator:latest}
@@ -351,9 +277,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     volumes:
       - coordinator_shared:/shared/epsilon
-    networks:
-      - epsilon_app
-      - scheduler_internal
+    networks: [epsilon]
 
   coordinator-executor:
     image: ${COORDINATOR_IMAGE:-ghcr.io/epsilon-data/coordinator:latest}
@@ -384,13 +308,7 @@ services:
       KEYCLOAK_CLIENT_SECRET: ${EPSILON_COORDINATOR_CLIENT_SECRET:-2MkLHmnKck3orcVfhGhp4IWM1GOpJ7Wl}
     volumes:
       - coordinator_shared:/shared/epsilon
-    networks:
-      - epsilon_app
-      - scheduler_internal
-      - pg_platform
-      - api_internal
-      - vault_host
-      - auth_internal
+    networks: [epsilon]
 
   coordinator-ai-agent:
     image: ${COORDINATOR_IMAGE:-ghcr.io/epsilon-data/coordinator:latest}
@@ -411,9 +329,7 @@ services:
       CREWAI_LLM_MODEL: ${CREWAI_LLM_MODEL:-gpt-4o-mini}
     volumes:
       - coordinator_shared:/shared/epsilon
-    networks:
-      - epsilon_app
-      - scheduler_internal
+    networks: [epsilon]
 
   # ===========================================================================
   # TRUST CENTER (Verification Center)
@@ -438,9 +354,7 @@ services:
       LOCAL_ROOT_CERT_PEM: ${LOCAL_ROOT_CERT_PEM:-}
     ports:
       - "${TRUST_CENTER_PORT:-3001}:3001"
-    networks:
-      - epsilon_app
-      - scheduler_internal
+    networks: [epsilon]
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/stats"]
       interval: 30s

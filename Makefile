@@ -7,7 +7,7 @@ COMPOSE := docker compose --profile metadata --profile frontend
 # Infrastructure services (from docker-compose.yml)
 INFRA_SERVICES := pg_platform pg_auth pg_test pg_admin \
 	redis keycloak keycloak-config-cli vault vault-init \
-	nginx rathole mailhog token-handler-api \
+	nginx mailhog token-handler-api \
 	zookeeper kafka elasticsearch cassandra cassandra-init atlas-server
 
 # Application services (from docker-compose.override.yml)
@@ -25,16 +25,13 @@ pull: ## Pre-pull all Docker images (~10 GB, do this first)
 	@echo "Pulling all images (this may take 10-20 min on first run)..."
 	$(COMPOSE) pull --ignore-buildable
 	@echo ""
-	@echo "Building rathole..."
-	$(COMPOSE) build rathole
-	@echo ""
 	@echo "All images ready. Run 'make up' to start."
 
 
 up: ## Start all services (infra first, then apps)
 	@echo ""
 	@echo "  Pre-pulling data-broker image (used by API at runtime)..."
-	@docker pull ghcr.io/epsilon-data/data-broker:latest > /dev/null 2>&1 || echo "  WARNING: Could not pull data-broker image. Project crawling will fail."
+	@docker pull ghcr.io/epsilon-data/data-broker:latest || echo "  ⚠ data-broker pull failed (crawling will not work)"
 	@echo ""
 	@echo "══════════════════════════════════════════════════════"
 	@echo "  Phase 1/3: Starting infrastructure..."
@@ -72,7 +69,7 @@ up: ## Start all services (infra first, then apps)
 	$(COMPOSE) up -d atlas-server
 	@echo ""
 	@echo "  Step 4: Remaining infra..."
-	$(COMPOSE) up -d pg_admin nginx rathole mailhog
+	$(COMPOSE) up -d pg_admin nginx mailhog
 	@echo "  Waiting for Atlas (this takes several minutes on first run)..."
 	@until docker exec atlas-server test -f /opt/atlas/state/.initDone 2>/dev/null; do sleep 10; done
 	@echo "  atlas:          init done, waiting for final startup..."
@@ -93,21 +90,35 @@ up: ## Start all services (infra first, then apps)
 	@echo "  scheduler-migrate: done"
 	@echo ""
 	@echo "══════════════════════════════════════════════════════"
-	@echo "  Phase 3/3: Starting application services..."
+	@echo "  Phase 3/3: Starting application services (one at a time)..."
 	@echo "══════════════════════════════════════════════════════"
-	$(COMPOSE) up -d $(APP_SERVICES)
-	@echo ""
-	@echo "  Reconnecting networks (Docker Desktop workaround)..."
-	@sleep 5
-	@docker restart epsilon-api > /dev/null 2>&1 || true
-	@echo "  Waiting for services to be ready..."
-	@sleep 5
+	@echo "  Starting middleware..."
+	$(COMPOSE) up -d middleware
+	@sleep 2
+	@echo "  Starting API..."
+	$(COMPOSE) up -d api
+	@sleep 3
+	@until curl -sf http://localhost:3334/api/v1/hub/health > /dev/null 2>&1; do sleep 3; done
+	@echo "  api:           ready"
+	@echo "  Starting frontend..."
+	$(COMPOSE) up -d frontend
+	@sleep 2
 	@until curl -sf http://localhost:3000 > /dev/null 2>&1; do sleep 3; done
 	@echo "  frontend:      ready"
+	@echo "  Starting trust center..."
+	$(COMPOSE) up -d trust-center
+	@sleep 2
 	@until curl -sf http://localhost:3001/api/stats > /dev/null 2>&1; do sleep 3; done
 	@echo "  trust-center:  ready"
+	@echo "  Starting job scheduler..."
+	$(COMPOSE) up -d job-scheduler
+	@sleep 2
 	@until curl -sf http://localhost:3005/api/health > /dev/null 2>&1; do sleep 3; done
 	@echo "  job-scheduler: ready"
+	@echo "  Starting coordinator workers..."
+	$(COMPOSE) up -d coordinator-fetcher coordinator-clone coordinator-executor coordinator-ai-agent
+	@sleep 2
+	@echo "  coordinator:   started"
 	@echo ""
 	@echo "══════════════════════════════════════════════════════"
 	@echo "  Epsilon is running!"
@@ -154,21 +165,153 @@ clean: ## Stop and remove all data (volumes)
 	@echo "All data removed."
 
 infra: ## Start infrastructure only
-	@echo "Starting infrastructure..."
-	$(COMPOSE) up -d $(INFRA_SERVICES)
-	@echo "Waiting for all infrastructure to be healthy..."
+	@echo ""
+	@echo "══════════════════════════════════════════════════════"
+	@echo "  Starting infrastructure..."
+	@echo "══════════════════════════════════════════════════════"
+	@echo ""
+	@echo "  Step 1/4: Databases & Redis..."
+	@$(COMPOSE) up -d pg_platform pg_auth pg_test redis
+	@until docker inspect pg_platform --format '{{.State.Health.Status}}' 2>/dev/null | grep -q healthy; do sleep 3; done
+	@echo "  ✓ pg_platform:    healthy"
+	@until docker inspect pg_auth --format '{{.State.Health.Status}}' 2>/dev/null | grep -q healthy; do sleep 3; done
+	@echo "  ✓ pg_auth:        healthy"
+	@echo "  ✓ redis:          started"
+	@echo ""
+	@echo "  Step 2/4: Keycloak & Vault..."
+	@$(COMPOSE) up -d keycloak vault
+	@until docker inspect keycloak --format '{{.State.Health.Status}}' 2>/dev/null | grep -q healthy; do sleep 5; done
+	@echo "  ✓ keycloak:       healthy"
+	@until docker inspect vault --format '{{.State.Health.Status}}' 2>/dev/null | grep -q healthy; do sleep 3; done
+	@echo "  ✓ vault:          healthy"
+	@$(COMPOSE) up -d keycloak-config-cli vault-init token-handler-api
+	@echo "  ✓ keycloak-config, vault-init, token-handler started"
+	@echo ""
+	@echo "  Step 3/4: Metadata stack..."
+	@$(COMPOSE) up -d cassandra elasticsearch
+	@until docker inspect cassandra --format '{{.State.Health.Status}}' 2>/dev/null | grep -q healthy; do sleep 5; done
+	@echo "  ✓ cassandra:      healthy"
+	@until docker inspect elasticsearch --format '{{.State.Health.Status}}' 2>/dev/null | grep -q healthy; do sleep 5; done
+	@echo "  ✓ elasticsearch:  healthy"
+	@$(COMPOSE) up -d cassandra-init zookeeper
+	@until docker inspect zookeeper --format '{{.State.Health.Status}}' 2>/dev/null | grep -q healthy; do sleep 3; done
+	@echo "  ✓ zookeeper:      healthy"
+	@$(COMPOSE) up -d kafka
+	@until docker inspect kafka --format '{{.State.Health.Status}}' 2>/dev/null | grep -q healthy; do sleep 3; done
+	@echo "  ✓ kafka:          healthy"
+	@echo "  ⏳ cassandra:     verifying CQL connectivity..."
+	@until docker exec cassandra cqlsh -u cassandra -p cassandra -e "DESCRIBE KEYSPACES" > /dev/null 2>&1; do sleep 5; done
+	@echo "  ✓ cassandra:      CQL ready"
+	@$(COMPOSE) up -d atlas-server
+	@echo "  ⏳ atlas:         initializing (this takes several minutes on first run)..."
 	@until docker inspect atlas-server --format '{{.State.Health.Status}}' 2>/dev/null | grep -q healthy; do sleep 10; done
-	@echo "All infrastructure healthy."
+	@echo "  ✓ atlas:          container healthy"
+	@echo "  ⏳ atlas:         waiting for HTTP to be ready..."
+	@until curl -so /dev/null http://localhost:21000/ 2>/dev/null; do sleep 5; done
+	@echo "  ✓ atlas:          HTTP ready (http://localhost:21000)"
+	@echo ""
+	@echo "  Step 4/4: Remaining infra..."
+	@$(COMPOSE) up -d pg_admin nginx mailhog
+	@echo "  ✓ nginx, pgadmin, mailpit started"
+	@echo "  Pre-pulling data-broker image..."
+	@docker pull ghcr.io/epsilon-data/data-broker:latest || echo "  ⚠ data-broker pull failed (crawling will not work)"
+	@echo ""
+	@echo "  ✅ All infrastructure healthy. Run 'make migrate' next."
 
-apps: ## Start application services only (assumes infra is healthy)
-	$(COMPOSE) up -d api-migrate pg_scheduler scheduler-migrate
+migrate: ## Run database migrations (assumes infra is healthy)
+	@echo ""
+	@echo "══════════════════════════════════════════════════════"
+	@echo "  Running database migrations..."
+	@echo "══════════════════════════════════════════════════════"
+	@echo ""
+	@$(COMPOSE) up -d pg_scheduler
+	@until docker inspect pg_scheduler --format '{{.State.Health.Status}}' 2>/dev/null | grep -q healthy; do sleep 3; done
+	@echo "  ✓ pg_scheduler:   healthy"
+	@$(COMPOSE) up -d api-migrate scheduler-migrate
+	@echo "  ⏳ api-migrate:   running..."
 	@until docker inspect epsilon-api-migrate --format '{{.State.Status}}' 2>/dev/null | grep -q exited; do sleep 3; done
+	@API_EXIT=$$(docker inspect epsilon-api-migrate --format '{{.State.ExitCode}}'); \
+	 if [ "$$API_EXIT" = "0" ]; then echo "  ✓ api-migrate:   done"; else echo "  ✗ api-migrate:   FAILED (exit $$API_EXIT)"; docker logs epsilon-api-migrate --tail 5; exit 1; fi
+	@echo "  ⏳ scheduler-migrate: running..."
 	@until docker inspect epsilon-scheduler-migrate --format '{{.State.Status}}' 2>/dev/null | grep -q exited; do sleep 3; done
-	$(COMPOSE) up -d $(APP_SERVICES)
-	@echo "  Reconnecting networks (Docker Desktop workaround)..."
-	@sleep 5
-	@docker restart epsilon-api > /dev/null 2>&1 || true
-	@echo "Application services started."
+	@SCHED_EXIT=$$(docker inspect epsilon-scheduler-migrate --format '{{.State.ExitCode}}'); \
+	 if [ "$$SCHED_EXIT" = "0" ]; then echo "  ✓ scheduler-migrate: done"; else echo "  ✗ scheduler-migrate: FAILED (exit $$SCHED_EXIT)"; docker logs epsilon-scheduler-migrate --tail 5; exit 1; fi
+	@echo ""
+	@echo "  ✅ Migrations complete. Run 'make apps' next."
+
+apps: ## Start application services one by one (assumes infra + migrations done)
+	@echo ""
+	@echo "══════════════════════════════════════════════════════"
+	@echo "  Starting application services..."
+	@echo "══════════════════════════════════════════════════════"
+	@echo ""
+	@echo "  [1/6] Middleware..."
+	@$(COMPOSE) up -d middleware
+	@sleep 2
+	@echo "  ✓ middleware:     started"
+	@echo "  [2/6] API..."
+	@$(COMPOSE) up -d api
+	@sleep 3
+	@until curl -sf http://localhost:3334/api/v1/hub/health > /dev/null 2>&1; do sleep 3; done
+	@echo "  ✓ api:            ready (http://localhost:3334)"
+	@echo "  [3/6] Frontend..."
+	@$(COMPOSE) up -d frontend
+	@sleep 2
+	@until curl -sf http://localhost:3000 > /dev/null 2>&1; do sleep 3; done
+	@echo "  ✓ frontend:       ready (http://localhost:3000)"
+	@echo "  [4/6] Trust Hub..."
+	@$(COMPOSE) up -d trust-center
+	@sleep 2
+	@until curl -sf http://localhost:3001/api/stats > /dev/null 2>&1; do sleep 3; done
+	@echo "  ✓ trust-hub:      ready (http://localhost:3001)"
+	@echo "  [5/6] Job Scheduler..."
+	@$(COMPOSE) up -d job-scheduler
+	@sleep 2
+	@until curl -sf http://localhost:3005/api/health > /dev/null 2>&1; do sleep 3; done
+	@echo "  ✓ job-scheduler:  ready (http://localhost:3005)"
+	@echo "  [6/6] Coordinator workers..."
+	@$(COMPOSE) up -d coordinator-fetcher coordinator-clone coordinator-executor coordinator-ai-agent
+	@sleep 2
+	@echo "  ✓ coordinator:    started (fetcher, clone, executor, ai-agent)"
+	@echo ""
+	@echo "  ✅ All services running. Run 'make check' to verify."
+
+seed-sample-db: ## Create a sample test database for local development
+	@echo "Creating sample database on platform PostgreSQL..."
+	@docker exec pg_platform psql -U $${PLATFORM_POSTGRES_USER:-epsilon_admin} -d $${PLATFORM_POSTGRES_DB:-epsilon} -c "CREATE DATABASE patientdb" 2>/dev/null || true
+	@bash scripts/seed-sample-db.sh --host localhost --port 6543 --user $${PLATFORM_POSTGRES_USER:-epsilon_admin} --password $${PLATFORM_POSTGRES_PASSWORD:-supersecret} --db patientdb
+	@echo "Done. Use host.docker.internal:6543/patientdb when creating a dataset."
+
+fix-networks: ## Fix Docker network issues (reconnect dropped networks + restart)
+	@echo "Reconnecting networks..."
+	@docker network connect epsilon_metadata_internal atlas-server 2>/dev/null || true
+	@docker network connect epsilon_app epsilon-api 2>/dev/null || true
+	@docker network connect epsilon_metadata_internal epsilon-api 2>/dev/null || true
+	@docker network connect epsilon_auth_internal epsilon-api 2>/dev/null || true
+	@docker network connect epsilon_api_internal nginx 2>/dev/null || true
+	@docker network connect epsilon_app nginx 2>/dev/null || true
+	@docker network connect epsilon_auth_internal epsilon-frontend 2>/dev/null || true
+	@docker network connect epsilon_app epsilon-frontend 2>/dev/null || true
+	@docker restart epsilon-api nginx epsilon-frontend 2>/dev/null || true
+	@echo "Done. Run 'make check' to verify."
+
+restart-api: ## Restart API only
+	@docker restart epsilon-api && echo "API restarted"
+
+restart-frontend: ## Restart frontend only
+	@docker restart epsilon-frontend && echo "Frontend restarted"
+
+restart-atlas: ## Restart Atlas metadata server
+	@docker restart atlas-server && echo "Atlas restarted (may take a few minutes to be healthy)"
+
+restart-coordinator: ## Restart all coordinator workers
+	@docker restart epsilon-fetcher epsilon-clone epsilon-executor epsilon-ai-agent 2>/dev/null; echo "Coordinator workers restarted"
+
+restart-scheduler: ## Restart job scheduler
+	@docker restart epsilon-job-scheduler && echo "Job scheduler restarted"
+
+restart-trust-center: ## Restart trust center
+	@docker restart epsilon-trust-center && echo "Trust center restarted"
 
 seed-sample-db: ## Create a sample test database for local development
 	@echo "Creating sample database on platform PostgreSQL..."

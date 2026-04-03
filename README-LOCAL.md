@@ -66,17 +66,13 @@ Data **never leaves the data owner's database** in raw form. The Middleware fetc
 git clone https://github.com/Epsilon-Data/epsilon.git
 cd epsilon
 make setup    # copy .env.example → .env
-make up       # start everything
+make infra    # start infrastructure (databases, Keycloak, Atlas, etc.)
+make migrate  # run database migrations
+make apps     # start application services
+make check    # verify everything is healthy
 ```
 
 > **First boot takes ~20-30 minutes.** This is normal and only happens once. Docker pulls ~10 GB of images, and Atlas initializes its JanusGraph schema on Cassandra + Elasticsearch — this is the slowest part. You can monitor Atlas progress at http://localhost:21000. Subsequent runs start in under 2 minutes since all data persists in Docker volumes.
-
-`make up` runs three phases automatically:
-1. **Infrastructure** — PostgreSQL, Keycloak, Vault, Redis, Atlas, Kafka, Elasticsearch, Cassandra
-2. **Migrations** — API and scheduler database schemas
-3. **Applications** — API, Frontend, Job Scheduler, Coordinator workers, Trust Hub
-
-Wait for it to print **"Epsilon is running!"** before opening the browser.
 
 ### GitHub OAuth (required for job submission)
 
@@ -111,19 +107,19 @@ Researchers submit jobs from GitHub repositories. You need a GitHub OAuth app:
 If you don't have a PostgreSQL database to test with, use the included seed script:
 
 ```bash
-# 1. Create and seed the sample database (requires local PostgreSQL)
-createdb epsilon_sample
-psql -d epsilon_sample < scripts/seed-sample-db.sql
+# 1. Create and seed the sample database on the platform's PostgreSQL
+docker exec -i pg_platform psql -U epsilon_admin -d epsilon -c "CREATE DATABASE epsilon_sample"
+docker exec -i pg_platform psql -U epsilon_admin -d epsilon_sample < scripts/seed-sample-db.sql
 
 # 2. Verify
-psql -d epsilon_sample -c "\
+docker exec pg_platform psql -U epsilon_admin -d epsilon_sample -c "\
   SELECT 'university' AS table, count(*) FROM university UNION ALL \
   SELECT 'student', count(*) FROM student UNION ALL \
   SELECT 'subject', count(*) FROM subject UNION ALL \
   SELECT 'student_subject', count(*) FROM student_subject;"
 ```
 
-This creates an `epsilon_sample` database with 4 tables (5 universities, 50 students, 23 subjects, 64 enrollments) on your local PostgreSQL.
+This creates an `epsilon_sample` database with 4 tables (5 universities, 50 students, 23 subjects, 64 enrollments) on the platform's PostgreSQL.
 
 Alternatively, use any existing PostgreSQL database accessible from Docker (e.g. local PostgreSQL, cloud-hosted, etc.).
 
@@ -137,21 +133,21 @@ Alternatively, use any existing PostgreSQL database accessible from Docker (e.g.
 
    **Option A — Database URL:**
    ```
-   postgresql://your_user:your_password@host.docker.internal:5432/epsilon_sample
+   postgresql://epsilon_admin:supersecret@pg_platform:5432/epsilon_sample?sslmode=disable
    ```
 
    **Option B — Manual entry:**
 
 | Field | Value |
 |-------|-------|
-| Hostname | `host.docker.internal` |
+| Hostname | `pg_platform` |
 | Port | `5432` |
-| Username | your local PostgreSQL username |
-| Password | your local PostgreSQL password |
+| Username | `epsilon_admin` |
+| Password | `supersecret` |
 | Database | `epsilon_sample` |
-| SSL | Off (local) |
+| SSL | Off |
 
-> **Note**: Use `host.docker.internal` to reach databases running on your host machine from inside Docker containers.
+> **Note**: Use `pg_platform` as hostname — the API and data-broker connect to it via Docker's internal network.
 
 6. Wait for the data broker to crawl the schema (~30s). You can check progress with `docker logs data-broker-* -f`
 7. Click **Create Archetype** — select which tables and columns to expose in the tree view
@@ -246,32 +242,40 @@ All application services use pre-built images from GitHub Container Registry:
 ## Commands
 
 ```bash
+# Full startup (recommended for first run)
+make infra      # 1. Start infrastructure (databases, Keycloak, Vault, Atlas, etc.)
+make migrate    # 2. Run database migrations
+make apps       # 3. Start application services one by one
+make check      # 4. Verify all services are healthy
+
+# Or all at once
+make up         # Runs infra → migrate → apps automatically
+
 # Lifecycle
-make up       # start everything (phased)
-make down     # stop everything (keeps data)
-make restart  # stop + start
-make clean    # stop and delete all data
+make down       # Stop everything (keeps data)
+make restart    # Stop + start
+make clean      # Stop and delete all data (volumes)
 
 # Monitoring
-make check    # verify all services
-make status   # show container status
-make logs     # follow all logs
+make check      # Verify all services
+make status     # Show container status
+make logs       # Follow all logs
 
 # Individual restarts
-make restart-api           # restart API only
-make restart-frontend      # restart frontend only
-make restart-atlas         # restart Atlas metadata server
-make restart-coordinator   # restart all coordinator workers
-make restart-scheduler     # restart job scheduler
-make restart-trust-center  # restart trust center
-make fix-networks          # fix Docker network issues (restarts key services)
+make restart-api           # Restart API only
+make restart-frontend      # Restart frontend only
+make restart-atlas         # Restart Atlas metadata server
+make restart-coordinator   # Restart all coordinator workers
+make restart-scheduler     # Restart job scheduler
+make restart-trust-center  # Restart trust center
+make fix-networks          # Fix Docker network issues (restarts key services)
 ```
 
 ## Troubleshooting
 
 ### Port already in use
 
-If `make up` fails with `Ports are not available: ... address already in use`:
+If `make infra` fails with `Ports are not available: ... address already in use`:
 
 ```bash
 # 1. Stop all containers
@@ -283,14 +287,16 @@ docker rm -f $(docker ps -aq) 2>/dev/null
 # 3. If ports are STILL held (common on Mac after failed starts):
 #    Quit Docker Desktop completely (not just close window),
 #    wait 5 seconds, reopen it, then:
-make up
+make infra
+make migrate
+make apps
 ```
 
 To check which ports are stuck: `lsof -i :<port> | grep LISTEN`
 
-### `make up` fails at health check (first run)
+### `make infra` fails at health check (first run)
 
-On the very first run, Keycloak and Cassandra need extra time to initialize. If `make up` fails with `dependency failed to start: container X is unhealthy`, just run `make up` again — Docker will resume from where it left off (volumes persist).
+On the very first run, Keycloak and Cassandra need extra time to initialize. If `make infra` fails with `dependency failed to start: container X is unhealthy`, just run `make infra` again — Docker will resume from where it left off (volumes persist).
 
 ### Atlas takes too long
 
@@ -298,20 +304,63 @@ Normal on first boot — Atlas initializes JanusGraph + Cassandra + Elasticsearc
 
 ### "Metadata service unavailable" or Atlas errors
 
-Docker Desktop for Mac has a known bug where containers silently lose their network attachments, especially with many containers and networks (Epsilon runs 30+ containers across 18 networks). When this happens, the API can't reach Atlas and you'll see `getaddrinfo ENOTFOUND atlas-server`.
+If the API can't reach Atlas (`getaddrinfo ENOTFOUND atlas-server`), run:
 
 ```bash
 make fix-networks
 ```
 
-This reconnects dropped networks and restarts the API. You may need to run it after `make up` if you see metadata errors. This issue does not occur on Linux.
+This reconnects any dropped Docker networks and restarts the API.
+
+### Keycloak "HTTPS required" error
+
+If you see an HTTPS redirect error when logging in locally:
+
+```bash
+docker exec keycloak /opt/keycloak/bin/kcadm.sh config credentials \
+  --server http://localhost:8080 --realm master \
+  --user admin@epsilon-data.org --password secret
+
+docker exec keycloak /opt/keycloak/bin/kcadm.sh update realms/epsilon -s sslRequired=NONE
+```
+
+### Atlas stuck on "already running under process X"
+
+Stale PID file from a previous container run. The entrypoint cleans this automatically, but if you see it:
+
+```bash
+docker exec atlas-server rm -f /opt/atlas/logs/atlas.pid
+docker restart atlas-server
+```
+
+Or do a full clean:
+
+```bash
+make down
+rm -rf images/atlas/state/.initDone
+make infra
+```
+
+### Atlas fails with "unknown host cassandra" or "Connection refused: 127.0.0.1:9042"
+
+Atlas can't reach Cassandra. This happens when Atlas and Cassandra are on different Docker networks. All services must be on the single `epsilon` network. Run:
+
+```bash
+make down
+make infra
+```
+
+If it persists, verify you're on the correct branch with the single-network docker-compose:
+
+```bash
+git branch --show-current  # should be fix/docker-multi-arch-networking or main (after merge)
+```
 
 ### Other issues
 
 | Issue | Fix |
 |-------|-----|
 | `keycloak` hostname not resolved | Ensure `127.0.0.1 keycloak` is in `/etc/hosts` |
-| `host.docker.internal` not resolved | Use Docker Desktop (Linux: add `extra_hosts` in compose) |
+| Data broker fails to crawl | Ensure Atlas is healthy (`docker logs atlas-server`) and the database is reachable |
 | Middleware returns 401 | Check `EPSILON_CLIENT_ID` and `EPSILON_CLIENT_SECRET` match Keycloak's `coordinator-client` |
-| Data broker fails to crawl | Ensure Atlas is healthy (`docker logs atlas-server`), and the database is reachable at `host.docker.internal` |
 | Windows | Requires WSL2 with Docker Desktop. The Makefile uses bash — run from WSL2 terminal |
