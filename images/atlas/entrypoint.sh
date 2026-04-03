@@ -31,6 +31,9 @@ if [ -z "${JAVA_HOME:-}" ] || [ ! -d "${JAVA_HOME}" ]; then
 fi
 export ATLAS_HOME=/opt/atlas
 
+# Clean stale PID file from previous container runs
+rm -f ${ATLAS_HOME}/logs/atlas.pid
+
 echo "JAVA_HOME=$JAVA_HOME (arch: $(uname -m))"
 
 echo ""

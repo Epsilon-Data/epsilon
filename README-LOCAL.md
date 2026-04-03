@@ -322,6 +322,23 @@ docker exec keycloak /opt/keycloak/bin/kcadm.sh config credentials \
 docker exec keycloak /opt/keycloak/bin/kcadm.sh update realms/epsilon -s sslRequired=NONE
 ```
 
+### Atlas stuck on "already running under process X"
+
+Stale PID file from a previous container run. The entrypoint cleans this automatically, but if you see it:
+
+```bash
+docker exec atlas-server rm -f /opt/atlas/logs/atlas.pid
+docker restart atlas-server
+```
+
+Or do a full clean:
+
+```bash
+make down
+rm -rf images/atlas/state/.initDone
+make infra
+```
+
 ### Other issues
 
 | Issue | Fix |
