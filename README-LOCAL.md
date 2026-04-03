@@ -339,6 +339,21 @@ rm -rf images/atlas/state/.initDone
 make infra
 ```
 
+### Atlas fails with "unknown host cassandra" or "Connection refused: 127.0.0.1:9042"
+
+Atlas can't reach Cassandra. This happens when Atlas and Cassandra are on different Docker networks. All services must be on the single `epsilon` network. Run:
+
+```bash
+make down
+make infra
+```
+
+If it persists, verify you're on the correct branch with the single-network docker-compose:
+
+```bash
+git branch --show-current  # should be fix/docker-multi-arch-networking or main (after merge)
+```
+
 ### Other issues
 
 | Issue | Fix |

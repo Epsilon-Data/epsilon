@@ -24,7 +24,9 @@ services:
       - epsilon
       - pg_test
   pg_platform:
-    networks: [epsilon]
+    networks:
+      - epsilon
+      - pg_test
   pg_auth:
     networks: [epsilon]
   pg_admin:
