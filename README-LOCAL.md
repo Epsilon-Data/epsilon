@@ -150,7 +150,31 @@ Alternatively, use any existing PostgreSQL database accessible from Docker (e.g.
 > **Note**: Use `pg_platform` as hostname — the API and data-broker connect to it via Docker's internal network.
 
 6. Wait for the data broker to crawl the schema (~30s). You can check progress with `docker logs data-broker-* -f`
-7. Click **Create Archetype** — select which tables and columns to expose in the tree view
+7. Click **Create Archetype** to define which data researchers can access. Example archetype using the sample database:
+
+   ```
+   ┌─────────────────────────────────────────────────────────────┐
+   │                  University Research Data                    │
+   │                      (Root Archetype)                        │
+   └──────┬──────────────────┬──────────────────┬────────────────┘
+          │                  │                  │
+          ▼                  ▼                  ▼
+   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+   │   Students   │  │   Subjects   │  │  Enrollments │
+   │    (Node)    │  │    (Node)    │  │    (Node)    │
+   └──────┬───────┘  └──────┬───────┘  └──────┬───────┘
+          │                  │                  │
+          ▼                  ▼                  ▼
+   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+   │  first_name  │  │  name        │  │  grade       │
+   │  last_name   │  │  credits     │  │  semester    │
+   │  email       │  │  department  │  │   (Leaves)   │
+   │   (Leaves)   │  │   (Leaves)   │  └──────────────┘
+   └──────────────┘  └──────────────┘
+   ```
+
+   Each **Leaf** maps to a database column. See [README-PRODUCTION.md → Step 3: Map Archetype and Publish](README-PRODUCTION.md#step-3-map-archetype-and-publish) for more details.
+
 8. Click **Publish** — the dataset is now visible to researchers in Browse Hub
 
 ### 2. Request Access to a Dataset (Researcher)
@@ -178,7 +202,10 @@ Alternatively, use any existing PostgreSQL database accessible from Docker (e.g.
 3. Edit `main.py` with your analysis code
 4. Test locally: `epsilon run` (runs against synthetic data)
 5. Build for deployment: `epsilon build` (creates `build/` directory)
-6. Push your code to GitHub
+6. Add all files (including `build/`) and push to GitHub:
+   ```bash
+   git add -A && git commit -m "build: ready for submission" && git push
+   ```
 
 ### 4. Submit a Research Job
 
