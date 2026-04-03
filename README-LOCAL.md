@@ -72,16 +72,7 @@ make apps     # start application services
 make check    # verify everything is healthy
 ```
 
-Or use `make up` to run all steps automatically.
-
 > **First boot takes ~20-30 minutes.** This is normal and only happens once. Docker pulls ~10 GB of images, and Atlas initializes its JanusGraph schema on Cassandra + Elasticsearch — this is the slowest part. You can monitor Atlas progress at http://localhost:21000. Subsequent runs start in under 2 minutes since all data persists in Docker volumes.
-
-`make up` runs three phases automatically:
-1. **Infrastructure** — PostgreSQL, Keycloak, Vault, Redis, Atlas, Kafka, Elasticsearch, Cassandra
-2. **Migrations** — API and scheduler database schemas
-3. **Applications** — API, Frontend, Job Scheduler, Coordinator workers, Trust Hub
-
-Wait for it to print **"Epsilon is running!"** before opening the browser.
 
 ### GitHub OAuth (required for job submission)
 
@@ -116,19 +107,19 @@ Researchers submit jobs from GitHub repositories. You need a GitHub OAuth app:
 If you don't have a PostgreSQL database to test with, use the included seed script:
 
 ```bash
-# 1. Create and seed the sample database (requires local PostgreSQL)
-createdb epsilon_sample
-psql -d epsilon_sample < scripts/seed-sample-db.sql
+# 1. Create and seed the sample database on the platform's PostgreSQL
+docker exec -i pg_platform psql -U epsilon_admin -d epsilon -c "CREATE DATABASE epsilon_sample"
+docker exec -i pg_platform psql -U epsilon_admin -d epsilon_sample < scripts/seed-sample-db.sql
 
 # 2. Verify
-psql -d epsilon_sample -c "\
+docker exec pg_platform psql -U epsilon_admin -d epsilon_sample -c "\
   SELECT 'university' AS table, count(*) FROM university UNION ALL \
   SELECT 'student', count(*) FROM student UNION ALL \
   SELECT 'subject', count(*) FROM subject UNION ALL \
   SELECT 'student_subject', count(*) FROM student_subject;"
 ```
 
-This creates an `epsilon_sample` database with 4 tables (5 universities, 50 students, 23 subjects, 64 enrollments) on your local PostgreSQL.
+This creates an `epsilon_sample` database with 4 tables (5 universities, 50 students, 23 subjects, 64 enrollments) on the platform's PostgreSQL.
 
 Alternatively, use any existing PostgreSQL database accessible from Docker (e.g. local PostgreSQL, cloud-hosted, etc.).
 
@@ -142,21 +133,21 @@ Alternatively, use any existing PostgreSQL database accessible from Docker (e.g.
 
    **Option A — Database URL:**
    ```
-   postgresql://your_user:your_password@host.docker.internal:5432/epsilon_sample
+   postgresql://epsilon_admin:supersecret@pg_platform:5432/epsilon_sample
    ```
 
    **Option B — Manual entry:**
 
 | Field | Value |
 |-------|-------|
-| Hostname | `host.docker.internal` |
+| Hostname | `pg_platform` |
 | Port | `5432` |
-| Username | your local PostgreSQL username |
-| Password | your local PostgreSQL password |
+| Username | `epsilon_admin` |
+| Password | `supersecret` |
 | Database | `epsilon_sample` |
-| SSL | Off (local) |
+| SSL | Off |
 
-> **Note**: Use `host.docker.internal` to reach databases running on your host machine from inside Docker containers.
+> **Note**: Use `pg_platform` as hostname — the API and data-broker connect to it via Docker's internal network.
 
 6. Wait for the data broker to crawl the schema (~30s). You can check progress with `docker logs data-broker-* -f`
 7. Click **Create Archetype** — select which tables and columns to expose in the tree view
@@ -311,20 +302,31 @@ Normal on first boot — Atlas initializes JanusGraph + Cassandra + Elasticsearc
 
 ### "Metadata service unavailable" or Atlas errors
 
-Docker Desktop for Mac has a known bug where containers silently lose their network attachments, especially with many containers and networks (Epsilon runs 30+ containers across 18 networks). When this happens, the API can't reach Atlas and you'll see `getaddrinfo ENOTFOUND atlas-server`.
+If the API can't reach Atlas (`getaddrinfo ENOTFOUND atlas-server`), run:
 
 ```bash
 make fix-networks
 ```
 
-This reconnects dropped networks and restarts the API. You may need to run it after `make up` if you see metadata errors. This issue does not occur on Linux.
+This reconnects any dropped Docker networks and restarts the API.
+
+### Keycloak "HTTPS required" error
+
+If you see an HTTPS redirect error when logging in locally:
+
+```bash
+docker exec keycloak /opt/keycloak/bin/kcadm.sh config credentials \
+  --server http://localhost:8080 --realm master \
+  --user admin@epsilon-data.org --password secret
+
+docker exec keycloak /opt/keycloak/bin/kcadm.sh update realms/epsilon -s sslRequired=NONE
+```
 
 ### Other issues
 
 | Issue | Fix |
 |-------|-----|
 | `keycloak` hostname not resolved | Ensure `127.0.0.1 keycloak` is in `/etc/hosts` |
-| `host.docker.internal` not resolved | Use Docker Desktop (Linux: add `extra_hosts` in compose) |
+| Data broker fails to crawl | Ensure Atlas is healthy (`docker logs atlas-server`) and the database is reachable |
 | Middleware returns 401 | Check `EPSILON_CLIENT_ID` and `EPSILON_CLIENT_SECRET` match Keycloak's `coordinator-client` |
-| Data broker fails to crawl | Ensure Atlas is healthy (`docker logs atlas-server`), and the database is reachable at `host.docker.internal` |
 | Windows | Requires WSL2 with Docker Desktop. The Makefile uses bash — run from WSL2 terminal |
