@@ -66,8 +66,13 @@ Data **never leaves the data owner's database** in raw form. The Middleware fetc
 git clone https://github.com/Epsilon-Data/epsilon.git
 cd epsilon
 make setup    # copy .env.example → .env
-make up       # start everything
+make infra    # start infrastructure (databases, Keycloak, Atlas, etc.)
+make migrate  # run database migrations
+make apps     # start application services
+make check    # verify everything is healthy
 ```
+
+Or use `make up` to run all steps automatically.
 
 > **First boot takes ~20-30 minutes.** This is normal and only happens once. Docker pulls ~10 GB of images, and Atlas initializes its JanusGraph schema on Cassandra + Elasticsearch — this is the slowest part. You can monitor Atlas progress at http://localhost:21000. Subsequent runs start in under 2 minutes since all data persists in Docker volumes.
 
@@ -246,25 +251,33 @@ All application services use pre-built images from GitHub Container Registry:
 ## Commands
 
 ```bash
+# Full startup (recommended for first run)
+make infra      # 1. Start infrastructure (databases, Keycloak, Vault, Atlas, etc.)
+make migrate    # 2. Run database migrations
+make apps       # 3. Start application services one by one
+make check      # 4. Verify all services are healthy
+
+# Or all at once
+make up         # Runs infra → migrate → apps automatically
+
 # Lifecycle
-make up       # start everything (phased)
-make down     # stop everything (keeps data)
-make restart  # stop + start
-make clean    # stop and delete all data
+make down       # Stop everything (keeps data)
+make restart    # Stop + start
+make clean      # Stop and delete all data (volumes)
 
 # Monitoring
-make check    # verify all services
-make status   # show container status
-make logs     # follow all logs
+make check      # Verify all services
+make status     # Show container status
+make logs       # Follow all logs
 
 # Individual restarts
-make restart-api           # restart API only
-make restart-frontend      # restart frontend only
-make restart-atlas         # restart Atlas metadata server
-make restart-coordinator   # restart all coordinator workers
-make restart-scheduler     # restart job scheduler
-make restart-trust-center  # restart trust center
-make fix-networks          # fix Docker network issues (restarts key services)
+make restart-api           # Restart API only
+make restart-frontend      # Restart frontend only
+make restart-atlas         # Restart Atlas metadata server
+make restart-coordinator   # Restart all coordinator workers
+make restart-scheduler     # Restart job scheduler
+make restart-trust-center  # Restart trust center
+make fix-networks          # Fix Docker network issues (restarts key services)
 ```
 
 ## Troubleshooting

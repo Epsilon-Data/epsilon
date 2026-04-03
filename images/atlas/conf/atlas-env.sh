@@ -17,7 +17,7 @@
 # limitations under the License.
 #
 # The java implementation to use. If JAVA_HOME is not found we expect java and jar to be in path
-export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-$(dpkg --print-architecture)
+export JAVA_HOME=/usr/lib/jvm/java-8-openjdk
 
 # any additional java opts you want to set. This will apply to both client and server operations
 #export ATLAS_OPTS=

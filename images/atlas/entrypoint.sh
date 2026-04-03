@@ -16,7 +16,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -euo pipefail
+# Note: no set -e — Atlas init commands may fail gracefully (patches, log4j warnings)
 
 export MANAGE_LOCAL_HBASE=false
 export MANAGE_LOCAL_SOLR=false
@@ -24,9 +24,14 @@ export MANAGE_LOCAL_SOLR=false
 export MANAGE_EMBEDDED_CASSANDRA=false
 export MANAGE_LOCAL_ELASTICSEARCH=false
 
-export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-$(dpkg --print-architecture)
-
+# Use JAVA_HOME from image ENV, or detect dynamically as fallback
+if [ -z "${JAVA_HOME:-}" ] || [ ! -d "${JAVA_HOME}" ]; then
+  JAVA_HOME_DETECTED=$(dirname $(dirname $(readlink -f $(which java))))
+  export JAVA_HOME=${JAVA_HOME_DETECTED%/jre}
+fi
 export ATLAS_HOME=/opt/atlas
+
+echo "JAVA_HOME=$JAVA_HOME (arch: $(uname -m))"
 
 echo ""
 echo "╔═══════════════════════════════════════════════════════════════════════╗"
@@ -43,8 +48,8 @@ cd ${ATLAS_HOME}/bin
 
 # TODO: Patch as part of image build
 # patch files
-patch --verbose --ignore-whitespace -N --fuzz 2 < ${ATLAS_HOME}/patches/atlas_start.py.patch || true
-patch --verbose --ignore-whitespace -N --fuzz 2 < ${ATLAS_HOME}/patches/atlas_config.py.patch || true
+patch --verbose --ignore-whitespace -N --fuzz 2 < ${ATLAS_HOME}/patches/atlas_start.py.patch; true
+patch --verbose --ignore-whitespace -N --fuzz 2 < ${ATLAS_HOME}/patches/atlas_config.py.patch; true
 
 if [ ! -e ${ATLAS_HOME}/state/.initDone ]
 then
