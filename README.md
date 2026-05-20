@@ -2,9 +2,18 @@
 
 **A Bring-Your-Own-Data Research Platform with Trusted Verification**
 
+<p>
+  <a href="https://www.acm.org/publications/policies/artifact-review-and-badging-current">
+    <img src="https://secartifacts.github.io/images/acmartifactbadge_available.png" alt="ACM Artifacts Available v1.1" width="100">
+  </a>
+  <a href="https://www.acm.org/publications/policies/artifact-review-and-badging-current">
+    <img src="https://secartifacts.github.io/images/acmartifactbadge_reusable.png" alt="ACM Artifacts Evaluated & Reusable v1.1" width="100">
+  </a>
+</p>
+
 Epsilon is an open-source platform for analyzing sensitive research data with per-execution verification using AWS Nitro Enclaves. Researchers link their own datasets without uploading data to platform infrastructure, and receive TEE-signed verification receipts binding specific code to specific data.
 
-> SysTEX 2026 — 9th Workshop on System Software for Trusted Execution
+> SysTEX 2026 — 9th Workshop on System Software for Trusted Execution &nbsp;·&nbsp; Awarded **ACM Artifacts Available v1.1** and **Artifacts Evaluated & Reusable v1.1** badges ([results](https://secartifacts.github.io/systex2026/results)).
 
 ## Quick Check (5 minutes)
 
@@ -177,7 +186,9 @@ Docs: [epsilon-proxy](https://github.com/Epsilon-Data/epsilon-proxy) | Releases:
 
 > Nizomjon Khajiev, Aare Puussaar, Lee Shen Chu, Patrick Olivier, Lay-Ki Soon, Delvin Varghese.
 > *Epsilon: A Bring-Your-Own-Data Research Platform with Trusted Verification.*
-> SysTEX 2026, co-located with EuroSys 2026, Edinburgh, United Kingdom.
+> Proceedings of the 9th Workshop on System Software for Trusted Execution (SysTEX '26), co-located with EuroSys 2026, Edinburgh, Scotland, UK, pp. 78–85.
+> ACM. DOI: [10.1145/3805690.3805733](https://doi.org/10.1145/3805690.3805733).
+> Awarded **ACM Artifacts Available v1.1** and **Artifacts Evaluated & Reusable v1.1** badges ([SysTEX 2026 AE results](https://secartifacts.github.io/systex2026/results)).
 
 ## License
 
