@@ -12,13 +12,15 @@ No setup required — use the live instance with pre-configured test accounts an
 
 ### Test Accounts
 
-| Role | Email | Password |
-|------|-------|----------|
-| Reviewer 1 | `reviewer1@epsilon-data.org` | `secret12345` |
-| Reviewer 2 | `reviewer2@epsilon-data.org` | `secret12345` |
-| Reviewer 3 | `reviewer3@epsilon-data.org` | `secret12345` |
-| Reviewer 4 | `reviewer4@epsilon-data.org` | `secret12345` |
-| Reviewer 5 | `reviewer5@epsilon-data.org` | `secret12345` |
+| Role | Email |
+|------|-------|
+| Reviewer 1 | `reviewer1@epsilon-data.org` |
+| Reviewer 2 | `reviewer2@epsilon-data.org` |
+| Reviewer 3 | `reviewer3@epsilon-data.org` |
+| Reviewer 4 | `reviewer4@epsilon-data.org` |
+| Reviewer 5 | `reviewer5@epsilon-data.org` |
+
+Passwords are not kept in this repository. They are supplied to reviewers separately with the submission.
 
 ## Pre-seeded Data
 
@@ -31,7 +33,7 @@ The production instance already has published datasets you can use immediately a
 ### Step 1: Create a new project
 
 1. Open https://app.epsilon-data.org
-2. Log in with your reviewer account (e.g. `reviewer1@epsilon-data.org` / `secret12345`)
+2. Log in with your reviewer account (e.g. `reviewer1@epsilon-data.org`) and the password supplied to you
 3. Click **New Project** in the Data Hub
 4. Fill in the project form:
    - **Project Name**: e.g. `University Analysis`
@@ -180,7 +182,7 @@ To create an archetype:
 ### Step 1: Browse and join a dataset
 
 1. Open https://app.epsilon-data.org
-2. Log in with your reviewer account (e.g. `reviewer1@epsilon-data.org` / `secret12345`)
+2. Log in with your reviewer account (e.g. `reviewer1@epsilon-data.org`) and the password supplied to you
 3. Go to **Browser Hub → Browse Projects** to see published datasets
 4. Click on a dataset and send a **Connection Request**
    - **Public datasets** are auto-approved instantly
@@ -216,7 +218,7 @@ To create an archetype:
 ### Step 3: Submit a research job
 
 1. Open https://analysis.epsilon-data.org
-2. Log in with your reviewer account (e.g. `reviewer1@epsilon-data.org` / `secret12345`)
+2. Log in with your reviewer account (e.g. `reviewer1@epsilon-data.org`) and the password supplied to you
 3. Connect your GitHub account — you'll be asked to authorize the Epsilon GitHub App
    > **Note for reviewers:** The GitHub OAuth requests access to public and private repositories. If you prefer not to grant access to your main account, you can create a temporary GitHub account for evaluation purposes. We only read the repository you point to — no writes are performed.
 4. Create a **Workspace** pointing to your research repository
