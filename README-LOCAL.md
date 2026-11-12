@@ -2,6 +2,10 @@
 
 Run the entire Epsilon Trusted Research Environment on your machine using Docker Compose in simulation mode. All services use pre-built Docker images from GitHub Container Registry — no source code compilation needed.
 
+> **What this local stack is.** It runs the **Cloud Connect** configuration with a **simulated enclave**: the enclave logic is an ordinary Python process, and its attestation documents are signed by a local test CA, not by AWS Nitro hardware. Use it to inspect the services, the job pipeline and the release workflow.
+>
+> **What it is not.** It is not the **Proxy** configuration (source-side encryption with a hardware enclave). That configuration cannot run here: epsilon-proxy releases data only to a genuine AWS Nitro enclave whose image measurement (PCR0) it was given, and it refuses the simulated enclave's documents. To follow the Proxy configuration end to end, use [README-PRODUCTION.md → Step 2b](README-PRODUCTION.md#step-2b-connect-via-epsilon-proxy), which runs against real Nitro Enclaves.
+
 ## Architecture Overview
 
 ```
@@ -42,13 +46,18 @@ Run the entire Epsilon Trusted Research Environment on your machine using Docker
 
 ### Key Design Principle
 
-Data **never leaves the data owner's database** in raw form. The Middleware fetches it, encrypts it, and sends it to the enclave (or local simulator). The platform operator never sees raw data. Output is bound to an attestation document with SHA-256 hashes of the script, dataset, and result.
+Output is bound to an attestation document with SHA-256 hashes of the script, dataset, and result, and is held until a reviewer releases it.
+
+How the data reaches the enclave depends on the configuration:
+
+- **Cloud Connect** (this local stack): the platform's Middleware holds the database credentials, reads the data, encrypts it and sends it to the enclave (here, the local simulator). The platform reads the data in this configuration.
+- **Proxy** (production only): epsilon-proxy runs next to the data owner's database, checks the enclave's attestation, and encrypts the extract for that enclave before anything leaves the owner's network. No platform component sees plaintext.
 
 ## Important Notes
 
-> **Rathole is NOT required for local deployment.** Rathole is only used with "Epsilon Proxy" mode (source-side encryption for BYOD). The local deployment uses "Cloud Connect" mode, where the platform connects to your database directly via the middleware service. No tunnel or rathole configuration needed. If you see rathole in a restarting state, it can be safely ignored.
+> **The local deployment uses Cloud Connect.** The platform connects to your database directly through the middleware service. Rathole (the tunnel) and epsilon-proxy belong to the Proxy configuration and are not part of this stack. If you see rathole in a restarting state, it can be safely ignored.
 
-> **epsilon-proxy is NOT required for local deployment.** In local mode, select "Cloud Connect" when creating a project. The platform connects to your database directly. epsilon-proxy is only needed for production BYOD with source-side encryption.
+> **The Proxy configuration needs a real enclave.** epsilon-proxy does not start without the expected PCR0 of an enclave image and accepts only attestation documents signed by AWS Nitro hardware for that image. The simulated enclave cannot produce one, so selecting "Epsilon Proxy" in a local project will not work. Follow [README-PRODUCTION.md → Step 2b](README-PRODUCTION.md#step-2b-connect-via-epsilon-proxy) for it.
 
 ## Prerequisites
 
@@ -128,7 +137,7 @@ Alternatively, use any existing PostgreSQL database accessible from Docker (e.g.
 1. Open http://localhost:3000
 2. Log in as **Data Owner**: `owner@epsilon-data.org` / `secret`
 3. Create a new project
-4. When asked **"How should the platform access your data?"**, choose **Cloud Connect** (not Epsilon Proxy — proxy is for production BYOD setups, not local dev)
+4. When asked **"How should the platform access your data?"**, choose **Cloud Connect** (Epsilon Proxy needs a real Nitro enclave and does not work with the local simulator — see the note at the top)
 5. Enter database credentials using either option:
 
    **Option A — Database URL:**
@@ -244,13 +253,14 @@ Alternatively, use any existing PostgreSQL database accessible from Docker (e.g.
 
 ## Local Simulation Mode
 
-The platform runs in **simulation mode** by default:
+The platform runs in **simulation mode** by default. Nothing below is evidence about the hardware-enclave deployment:
 
 - `USE_LOCAL_ENCLAVE=true` — enclave logic runs as a regular Python process (no AWS Nitro hardware needed)
 - Attestation documents are **structurally identical** COSE_Sign1 documents signed by a local ECDSA P-384 CA
 - The Trust Hub's client-side verifier (`@epsilon-data/nitro-verify`) accepts the local root CA via `DEV_MODE=true`
 - PCR values are placeholders — real hardware measurements only exist in production with AWS Nitro Enclaves
-- All other functionality (archetype builder, job pipeline, data ingestion, verification) works identically to production
+- Data access is Cloud Connect: the platform's middleware reads the database. The Proxy configuration is not available locally
+- The archetype builder, the job pipeline, the output release workflow and the verification pages run the same code as production
 
 ## Docker Images
 
