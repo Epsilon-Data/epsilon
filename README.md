@@ -168,14 +168,14 @@ Docs: [epsilon-sdk](https://github.com/Epsilon-Data/epsilon-sdk) | PyPI: [epsilo
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Epsilon-Data/epsilon-proxy/main/scripts/install.sh | sh
-epsilon-proxy register --token <TOKEN>
+epsilon-proxy register --token <TOKEN> --expected-pcr0 <PCR0>
 epsilon-proxy start
 ```
 
 Data owners install epsilon-proxy next to their database. The proxy:
-1. Verifies the enclave's attestation (COSE_Sign1, certificate chain, PCR0)
+1. Verifies the enclave's attestation (COSE_Sign1, certificate chain, PCR0 equal to the one the owner registered)
 2. Queries the local database (credentials never leave the machine)
-3. Encrypts results with the enclave's attested public key (RSA-2048-OAEP + AES-256-CBC)
+3. Encrypts results with the enclave's attested public key (RSA-2048-OAEP + AES-256-GCM) and logs the release on the owner's machine
 4. Tunnels ciphertext to the coordinator via rathole (zero inbound ports required) — coordinator forwards to enclave via vsock
 
 No platform component sees plaintext data.

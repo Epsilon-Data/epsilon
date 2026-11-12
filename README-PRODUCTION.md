@@ -44,7 +44,7 @@ The production instance already has published datasets you can use immediately a
    - **Cloud Connect** — provide database credentials directly. The platform connects to your database. Simpler setup, suitable for cloud-hosted databases.
    - **Epsilon Proxy** — install a lightweight agent next to your database. Data is encrypted locally before leaving your network. More secure for sensitive data.
 
-   > **For evaluation:** Cloud Connect is easier if you have a cloud-hosted PostgreSQL (e.g. Neon, Supabase, RDS). Use Proxy if you want to test the full source-side encryption flow.
+   > **For evaluation:** choose **Epsilon Proxy** to follow the configuration the platform is designed around: source-side encryption, released only to the attested enclave (Step 2b). Cloud Connect is quicker if you have a cloud-hosted PostgreSQL (e.g. Neon, Supabase, RDS), but in it the platform's middleware reads your database.
 
 6. Click **Create** — your project appears in the Data Hub dashboard
 
@@ -107,9 +107,11 @@ You can also use any existing PostgreSQL database with data instead.
 curl -fsSL https://raw.githubusercontent.com/Epsilon-Data/epsilon-proxy/main/scripts/install.sh | sh
 
 # 2. Get your project token from the Data Hub UI (Project Settings → Proxy → Generate Token)
-#    Then register:
-epsilon-proxy register --token <YOUR_PROJECT_TOKEN>
+#    Then register, naming the enclave image you release data to:
+epsilon-proxy register --token <YOUR_PROJECT_TOKEN> --expected-pcr0 <PCR0>
 ```
+
+`<PCR0>` is the measurement of the enclave image (96 hex characters). Take the value for the current enclave version from the published registry, [`published/pcr-registry.json`](https://github.com/Epsilon-Data/epsilon-enclave/tree/main/published) in `epsilon-enclave`; the [Trust Hub](https://trust.epsilon-data.org) shows the same registry. The proxy releases data to that image only: it does not start without the value, and it refuses every request from any other image.
 
 During registration, you'll be prompted for database credentials. Choose option `[1] Full URL` and enter:
 
@@ -128,6 +130,7 @@ The proxy will:
 - Register with the platform and appear in your Data Hub project
 - Crawl your database schema automatically (~10 seconds)
 - Stay running and listen for execution requests
+- Print the PCR0 it releases data to and the path of its release log
 
 When a researcher submits a job, you'll see logs like:
 
@@ -136,8 +139,16 @@ When a researcher submits a job, you'll see logs like:
 [QUERY] request_id=coord-JOB-XXX rows=230 cols=5 query_ms=5 encrypt_ms=0 size=16896
 ```
 
-- `[ATTESTATION]` — the proxy verified the enclave's identity (COSE_Sign1 signature, AWS cert chain, PCR0) and confirmed the public key is bound to the attestation. Data is only released after this check passes.
+- `[ATTESTATION]` — the proxy verified the enclave's identity (COSE_Sign1 signature, AWS cert chain, PCR0 equal to the one you registered) and confirmed the public key is bound to the attestation. A document is accepted once, and only within five minutes of its signed time. Data is only released after these checks pass.
 - `[QUERY]` — the proxy queried your local database, encrypted the results with the enclave's public key, and sent ciphertext through the tunnel. The platform never sees plaintext.
+
+**Your own record of each release.** Before the encrypted extract is returned, the proxy appends one line to `~/.epsilon-proxy/releases.log`: the time, the query, the full PCR0, the row count and the SHA-256 of the plaintext extract (`extract_sha256`). The enclave signs the same digest as `dataset_hash` in the job's attestation, so you can compare the two:
+
+```bash
+tail -n 1 ~/.epsilon-proxy/releases.log
+```
+
+The `extract_sha256` in that line should equal `dataset_hash` in the job's signed user_data, shown on its Trust Hub page under Execution Proof.
 
 > **Note:** Database credentials are stored locally only in `~/.epsilon-proxy/config.yaml` — they are never sent to the platform.
 
